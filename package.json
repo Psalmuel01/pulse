@@ -2,6 +2,7 @@
   "name": "pulse",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,7 +13,10 @@
     "prisma:push": "prisma db push",
     "hh:compile": "hardhat compile",
     "hh:test": "hardhat test",
-    "hh:deploy:tempo": "hardhat run scripts/deploy-pulse.js --network tempo"
+    "hh:deploy": "hardhat run --build-profile production scripts/deploy-pulse.ts",
+    "hh:deploy:ignition": "hardhat ignition deploy ignition/modules/PulseSubscriptions.ts",
+    "hh:deploy:tempo": "hardhat run --build-profile production --network tempo scripts/deploy-pulse.ts",
+    "hh:deploy:tempo:ignition": "hardhat ignition deploy ignition/modules/PulseSubscriptions.ts --network tempo"
   },
   "dependencies": {
     "@prisma/client": "^6.3.1",
@@ -28,7 +32,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.0",
     "@openzeppelin/contracts": "^5.2.0",
     "@types/node": "^22.13.5",
     "@types/react": "^18.3.18",
@@ -37,9 +41,10 @@
     "dotenv": "^16.4.7",
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.24",
-    "hardhat": "^2.22.19",
+    "hardhat": "^3.0.0",
     "postcss": "^8.5.3",
     "prisma": "^6.3.1",
+    "solc": "^0.8.24",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3"
   }

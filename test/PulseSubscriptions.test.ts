@@ -1,30 +1,30 @@
-const { expect } = require("chai");
-const { ethers } = require("hardhat");
-const { time } = require("@nomicfoundation/hardhat-network-helpers");
+import { expect } from "chai";
+import { network } from "hardhat";
 
 describe("PulseSubscriptions", function () {
   const DECIMALS = 6;
   const THIRTY_DAYS = 30 * 24 * 60 * 60;
 
-  function usd(amount) {
+  function usd(amount: string) {
     return ethers.parseUnits(amount, DECIMALS);
   }
 
-  let token;
-  let pulse;
-  let owner;
-  let creator;
-  let subscriber;
+  let token: any;
+  let pulse: any;
+  let ethers: any;
+  let networkHelpers: any;
+  let owner: any;
+  let creator: any;
+  let subscriber: any;
 
   beforeEach(async function () {
+    ({ ethers, networkHelpers } = await network.connect());
     [owner, creator, subscriber] = await ethers.getSigners();
 
-    const MockUSD = await ethers.getContractFactory("MockUSD");
-    token = await MockUSD.deploy("Mock USD", "mUSD", DECIMALS);
+    token = await ethers.deployContract("MockUSD", ["Mock USD", "mUSD", DECIMALS]);
     await token.waitForDeployment();
 
-    const PulseSubscriptions = await ethers.getContractFactory("PulseSubscriptions");
-    pulse = await PulseSubscriptions.deploy(await token.getAddress());
+    pulse = await ethers.deployContract("PulseSubscriptions", [await token.getAddress()]);
     await pulse.waitForDeployment();
 
     await token.mint(subscriber.address, usd("1000"));
@@ -60,7 +60,7 @@ describe("PulseSubscriptions", function () {
     expect(creatorState.totalEarnings).to.equal(fee);
 
     const firstExpiry = await pulse.getSubscriptionExpiry(subscriber.address, creator.address);
-    const latestTime = await time.latest();
+    const latestTime = await networkHelpers.time.latest();
     expect(firstExpiry).to.be.greaterThan(BigInt(latestTime));
 
     await token.connect(subscriber).approve(await pulse.getAddress(), fee);
@@ -111,7 +111,7 @@ describe("PulseSubscriptions", function () {
 
     expect(await pulse.isActiveSubscriber(subscriber.address, creator.address)).to.equal(true);
 
-    await time.increase(THIRTY_DAYS + 1);
+    await networkHelpers.time.increase(THIRTY_DAYS + 1);
     expect(await pulse.isActiveSubscriber(subscriber.address, creator.address)).to.equal(false);
   });
 });

@@ -8,3 +8,5 @@ coverage
 artifacts
 cache
 typechain-types
+ignition/deployments
+types

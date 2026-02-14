@@ -1,4 +1,4 @@
-const hre = require("hardhat");
+import { network } from "hardhat";
 
 async function main() {
   const stablecoinAddress = process.env.TEMPO_STABLECOIN_ADDRESS;
@@ -7,11 +7,12 @@ async function main() {
     throw new Error("Missing TEMPO_STABLECOIN_ADDRESS in environment.");
   }
 
-  const [deployer] = await hre.ethers.getSigners();
+  const { ethers } = await network.connect();
+
+  const [deployer] = await ethers.getSigners();
   console.log(`Deploying with account: ${deployer.address}`);
 
-  const PulseSubscriptions = await hre.ethers.getContractFactory("PulseSubscriptions");
-  const pulse = await PulseSubscriptions.deploy(stablecoinAddress);
+  const pulse = await ethers.deployContract("PulseSubscriptions", [stablecoinAddress]);
   await pulse.waitForDeployment();
 
   console.log(`PulseSubscriptions deployed at: ${await pulse.getAddress()}`);

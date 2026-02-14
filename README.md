@@ -55,16 +55,31 @@ Backend routes map to these Solidity functions:
 Contract files:
 
 - `contracts/PulseSubscriptions.sol`
-- `contracts/MockUSD.sol` (test token)
+- `contracts/mocks/MockUSD.sol` (test token)
+
+Hardhat project layout:
+
+- `contracts/`
+- `test/`
+- `scripts/`
+- `ignition/modules/`
 
 ## Hardhat
+
+This repo is wired for Hardhat 3 + `@nomicfoundation/hardhat-toolbox-mocha-ethers`.
 
 1. Compile contracts:
    - `npm run hh:compile`
 2. Run contract tests:
    - `npm run hh:test`
-3. Deploy to Tempo (after setting env values):
+3. Deploy with script (default simulated network):
+   - `npm run hh:deploy`
+4. Deploy with Ignition module (default simulated network):
+   - `npm run hh:deploy:ignition`
+5. Deploy to Tempo with script (after setting env values):
    - `npm run hh:deploy:tempo`
+6. Deploy to Tempo with Ignition module:
+   - `npm run hh:deploy:tempo:ignition`
 
 ## Quick Start
 
