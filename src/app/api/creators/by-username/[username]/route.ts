@@ -1,7 +1,34 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, isDatabaseConfigured } from "@/lib/db";
+import { getDemoCreatorByUsername } from "@/lib/demo-data";
 
 export async function GET(_: Request, { params }: { params: { username: string } }) {
+  if (!isDatabaseConfigured) {
+    const creator = getDemoCreatorByUsername(params.username);
+    if (!creator) {
+      return NextResponse.json({ error: "Creator not found." }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      creator: {
+        id: creator.id,
+        username: creator.username,
+        category: creator.category,
+        walletAddress: "0xDEMO000000000000000000000000000000000111",
+        subscriptionFee: creator.subscriptionFee,
+        subscriberCount: creator.subscriberCount,
+        lifetimeEarnings: "0",
+        availableEarnings: "0",
+        contents: creator.contents.map((content) => ({
+          ...content,
+          description: null,
+          thumbnailPath: null,
+          createdAt: new Date()
+        }))
+      }
+    });
+  }
+
   const creator = await db.creator.findUnique({
     where: { username: params.username },
     include: {

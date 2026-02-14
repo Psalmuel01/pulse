@@ -59,7 +59,7 @@ function hexToBigInt(hex: string) {
   try {
     return BigInt(hex);
   } catch {
-    return 0n;
+    return BigInt(0);
   }
 }
 

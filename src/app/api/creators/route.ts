@@ -2,10 +2,27 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { registerCreatorContractCall } from "@/lib/contract";
-import { db } from "@/lib/db";
+import { db, isDatabaseConfigured } from "@/lib/db";
+import { demoCreators } from "@/lib/demo-data";
 import { createCreatorSchema } from "@/lib/validators";
 
 export async function GET() {
+  if (!isDatabaseConfigured) {
+    return NextResponse.json({
+      creators: demoCreators.map((creator) => ({
+        id: creator.id,
+        username: creator.username,
+        category: creator.category,
+        walletAddress: "0xDEMO000000000000000000000000000000000111",
+        subscriptionFee: creator.subscriptionFee,
+        contentCount: creator.contents.length,
+        subscriberCount: creator.subscriberCount,
+        lifetimeEarnings: "0",
+        availableEarnings: "0"
+      }))
+    });
+  }
+
   const now = new Date();
 
   const creators = await db.creator.findMany({
@@ -40,6 +57,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!isDatabaseConfigured) {
+    return NextResponse.json(
+      { error: "Database is not configured. Set DATABASE_URL to create creators." },
+      { status: 503 }
+    );
+  }
+
   const user = await getCurrentUserFromRequest(request);
   const payload = await request.json().catch(() => null);
   const parsed = createCreatorSchema.safeParse(payload);

@@ -1,20 +1,51 @@
 import { CreatorCard } from "@/components/creator-card";
-import { db } from "@/lib/db";
+import { db, isDatabaseConfigured } from "@/lib/db";
+import { demoCreators } from "@/lib/demo-data";
 
 export default async function ExplorePage() {
-  const now = new Date();
-  const creators = await db.creator.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      subscriptions: {
-        where: {
-          status: "ACTIVE",
-          expiresAt: { gt: now }
-        },
-        select: { id: true }
-      }
+  let creators: Array<{
+    id: string;
+    username: string;
+    category: string;
+    subscriptionFee: string;
+    subscriberCount: number;
+  }> = [];
+
+  if (isDatabaseConfigured) {
+    try {
+      const now = new Date();
+      const dbCreators = await db.creator.findMany({
+        orderBy: { createdAt: "desc" },
+        include: {
+          subscriptions: {
+            where: {
+              status: "ACTIVE",
+              expiresAt: { gt: now }
+            },
+            select: { id: true }
+          }
+        }
+      });
+
+      creators = dbCreators.map((creator) => ({
+        id: creator.id,
+        username: creator.username,
+        category: creator.category,
+        subscriptionFee: creator.subscriptionFee.toString(),
+        subscriberCount: creator.subscriptions.length
+      }));
+    } catch {
+      creators = [];
     }
-  });
+  } else {
+    creators = demoCreators.map((creator) => ({
+      id: creator.id,
+      username: creator.username,
+      category: creator.category,
+      subscriptionFee: creator.subscriptionFee,
+      subscriberCount: creator.subscriberCount
+    }));
+  }
 
   return (
     <section className="space-y-6">
@@ -38,8 +69,8 @@ export default async function ExplorePage() {
               id={creator.id}
               username={creator.username}
               category={creator.category}
-              subscriptionFee={creator.subscriptionFee.toString()}
-              subscriberCount={creator.subscriptions.length}
+              subscriptionFee={creator.subscriptionFee}
+              subscriberCount={creator.subscriberCount}
             />
           ))}
         </div>

@@ -3,10 +3,25 @@ import { NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { userHasActiveSubscription } from "@/lib/access";
 import { subscribeContractCall } from "@/lib/contract";
-import { db } from "@/lib/db";
+import { db, isDatabaseConfigured } from "@/lib/db";
 import { unlockSchema } from "@/lib/validators";
 
 export async function POST(request: Request) {
+  if (!isDatabaseConfigured) {
+    const payload = await request.json().catch(() => null);
+    const parsed = unlockSchema.safeParse(payload);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.flatten() }, { status: 400 });
+    }
+
+    return NextResponse.json({
+      unlocked: true,
+      accessMode: "payPerView",
+      unlockId: `demo-unlock-${parsed.data.contentId}`,
+      viewsRemaining: 1
+    });
+  }
+
   const user = await getCurrentUserFromRequest(request);
   const payload = await request.json().catch(() => null);
   const parsed = unlockSchema.safeParse(payload);

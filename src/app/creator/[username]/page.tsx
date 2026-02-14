@@ -1,13 +1,44 @@
 import { notFound } from "next/navigation";
 import { CreatorProfileClient } from "@/components/creator-profile-client";
 import { getCurrentUserFromServerContext } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, isDatabaseConfigured } from "@/lib/db";
+import { getDemoCreatorByUsername } from "@/lib/demo-data";
 
 export default async function CreatorProfilePage({ params }: { params: { username: string } }) {
+  const username = decodeURIComponent(params.username);
+
+  if (!isDatabaseConfigured) {
+    const creator = getDemoCreatorByUsername(username);
+    if (!creator) {
+      notFound();
+    }
+
+    return (
+      <CreatorProfileClient
+        creator={{
+          id: creator.id,
+          username: creator.username,
+          category: creator.category,
+          subscriptionFee: creator.subscriptionFee,
+          subscriberCount: creator.subscriberCount
+        }}
+        contents={creator.contents.map((content) => ({
+          id: content.id,
+          title: content.title,
+          type: content.type,
+          price: content.price,
+          onlyForSubscribers: content.onlyForSubscribers
+        }))}
+        initialSubscribed={false}
+        initialUnlockedIds={[]}
+      />
+    );
+  }
+
   const user = await getCurrentUserFromServerContext();
 
   const creator = await db.creator.findUnique({
-    where: { username: decodeURIComponent(params.username) },
+    where: { username },
     include: {
       contents: {
         orderBy: { createdAt: "desc" }

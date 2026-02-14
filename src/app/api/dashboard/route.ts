@@ -1,9 +1,16 @@
 import { format, subDays } from "date-fns";
 import { NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, isDatabaseConfigured } from "@/lib/db";
 
 export async function GET(request: Request) {
+  if (!isDatabaseConfigured) {
+    return NextResponse.json(
+      { error: "Database is not configured. Set DATABASE_URL to use creator analytics." },
+      { status: 503 }
+    );
+  }
+
   const user = await getCurrentUserFromRequest(request);
   const creator = await db.creator.findUnique({ where: { userId: user.id } });
 

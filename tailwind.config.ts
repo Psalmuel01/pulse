@@ -14,8 +14,8 @@ const config: Config = {
         border: "hsl(var(--border))"
       },
       fontFamily: {
-        sans: ["var(--font-space-grotesk)", "system-ui", "sans-serif"],
-        serif: ["var(--font-source-serif)", "Georgia", "serif"]
+        sans: ["Avenir Next", "Segoe UI", "Helvetica Neue", "system-ui", "sans-serif"],
+        serif: ["Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Georgia", "serif"]
       },
       boxShadow: {
         glow: "0 10px 40px rgba(20, 64, 110, 0.18)"

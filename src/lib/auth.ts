@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { db } from "@/lib/db";
+import { db, isDatabaseConfigured } from "@/lib/db";
 
 export type AuthenticatedUser = {
   id: string;
@@ -13,27 +13,36 @@ function withDemoFallback(value: string | null, fallback: string) {
 }
 
 async function upsertUser(user: AuthenticatedUser): Promise<AuthenticatedUser> {
-  const record = await db.user.upsert({
-    where: { id: user.id },
-    update: {
-      walletAddress: user.walletAddress ?? undefined,
-      email: user.email ?? undefined,
-      phone: user.phone ?? undefined
-    },
-    create: {
-      id: user.id,
-      walletAddress: user.walletAddress ?? undefined,
-      email: user.email ?? undefined,
-      phone: user.phone ?? undefined
-    }
-  });
+  if (!isDatabaseConfigured) {
+    return user;
+  }
 
-  return {
-    id: record.id,
-    walletAddress: record.walletAddress,
-    email: record.email,
-    phone: record.phone
-  };
+  try {
+    const record = await db.user.upsert({
+      where: { id: user.id },
+      update: {
+        walletAddress: user.walletAddress ?? undefined,
+        email: user.email ?? undefined,
+        phone: user.phone ?? undefined
+      },
+      create: {
+        id: user.id,
+        walletAddress: user.walletAddress ?? undefined,
+        email: user.email ?? undefined,
+        phone: user.phone ?? undefined
+      }
+    });
+
+    return {
+      id: record.id,
+      walletAddress: record.walletAddress,
+      email: record.email,
+      phone: record.phone
+    };
+  } catch {
+    // In local/demo mode, keep frontend usable even if DB is unavailable.
+    return user;
+  }
 }
 
 export async function getCurrentUserFromRequest(request: Request): Promise<AuthenticatedUser> {

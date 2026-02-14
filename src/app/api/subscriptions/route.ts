@@ -3,10 +3,29 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { subscribeContractCall } from "@/lib/contract";
-import { db } from "@/lib/db";
+import { db, isDatabaseConfigured } from "@/lib/db";
+import { demoCreators } from "@/lib/demo-data";
 import { subscribeSchema } from "@/lib/validators";
 
 export async function GET(request: Request) {
+  if (!isDatabaseConfigured) {
+    return NextResponse.json({
+      subscriptions: demoCreators.map((creator) => ({
+        id: `demo-sub-${creator.id}`,
+        creator: {
+          id: creator.id,
+          username: creator.username,
+          category: creator.category,
+          subscriptionFee: creator.subscriptionFee
+        },
+        startsAt: new Date(),
+        expiresAt: addDays(new Date(), 30),
+        amount: creator.subscriptionFee,
+        onChainTxHash: "demo_tx"
+      }))
+    });
+  }
+
   const user = await getCurrentUserFromRequest(request);
 
   const subscriptions = await db.subscription.findMany({
@@ -44,6 +63,28 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (!isDatabaseConfigured) {
+    const payload = await request.json().catch(() => null);
+    const parsed = subscribeSchema.safeParse(payload);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid payload", details: parsed.error.flatten() }, { status: 400 });
+    }
+
+    return NextResponse.json({
+      subscription: {
+        id: `demo-sub-${parsed.data.creatorId}`,
+        startsAt: new Date(),
+        expiresAt: addDays(new Date(), 30),
+        amount: "9.99",
+        status: "ACTIVE"
+      },
+      creatorEarnings: {
+        lifetime: "0",
+        available: "0"
+      }
+    });
+  }
+
   const user = await getCurrentUserFromRequest(request);
   const payload = await request.json().catch(() => null);
   const parsed = subscribeSchema.safeParse(payload);

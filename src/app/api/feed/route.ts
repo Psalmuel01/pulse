@@ -1,14 +1,60 @@
 import { NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, isDatabaseConfigured } from "@/lib/db";
+import { demoCreators } from "@/lib/demo-data";
 
 type Tab = "all" | "subscriptions" | "history";
 
 export async function GET(request: Request) {
-  const user = await getCurrentUserFromRequest(request);
   const { searchParams } = new URL(request.url);
   const tab = (searchParams.get("tab") ?? "all") as Tab;
 
+  if (!isDatabaseConfigured) {
+    if (tab === "subscriptions") {
+      return NextResponse.json({
+        tab,
+        data: demoCreators.map((creator) => ({
+          id: `demo-sub-${creator.id}`,
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          creator: {
+            id: creator.id,
+            username: creator.username,
+            category: creator.category,
+            subscriptionFee: creator.subscriptionFee,
+            contents: creator.contents
+          }
+        }))
+      });
+    }
+
+    if (tab === "history") {
+      return NextResponse.json({
+        tab,
+        data: []
+      });
+    }
+
+    return NextResponse.json({
+      tab: "all",
+      data: demoCreators.flatMap((creator) =>
+        creator.contents.map((content) => ({
+          contentId: content.id,
+          title: content.title,
+          type: content.type,
+          price: content.price,
+          creator: {
+            id: creator.id,
+            username: creator.username,
+            category: creator.category
+          },
+          lastActivityAt: new Date(),
+          source: "unlock"
+        }))
+      )
+    });
+  }
+
+  const user = await getCurrentUserFromRequest(request);
   const now = new Date();
 
   if (tab === "subscriptions") {

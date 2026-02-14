@@ -1,7 +1,8 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-const links = [
+const links: Array<{ href: Route; label: string }> = [
   { href: "/explore", label: "Explore" },
   { href: "/feed", label: "Feed" },
   { href: "/dashboard", label: "Creator Dashboard" },

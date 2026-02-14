@@ -26,7 +26,7 @@ body {
     radial-gradient(circle at 88% 0%, rgba(14, 116, 144, 0.1), transparent 30%),
     hsl(var(--canvas));
   color: hsl(var(--ink));
-  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+  font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
   min-height: 100vh;
 }
 

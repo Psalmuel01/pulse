@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server";
 import { consumeSingleUnlock, userHasActiveSubscription } from "@/lib/access";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, isDatabaseConfigured } from "@/lib/db";
 import { createContentSignedUrl } from "@/lib/supabase";
 
 export async function POST(
   request: Request,
   { params }: { params: { contentId: string } }
 ) {
+  if (!isDatabaseConfigured) {
+    return NextResponse.json({
+      contentId: params.contentId,
+      signedUrl: "https://example.com/demo-content",
+      expiresIn: 120,
+      accessMode: "payPerView"
+    });
+  }
+
   const user = await getCurrentUserFromRequest(request);
 
   const content = await db.content.findUnique({

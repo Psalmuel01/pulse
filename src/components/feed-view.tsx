@@ -5,9 +5,48 @@ import { toUsd } from "@/lib/utils";
 
 type Tab = "all" | "subscriptions" | "history";
 
+type AllFeedRow = {
+  contentId: string;
+  title: string;
+  type: string;
+  price: string;
+  creator: {
+    username: string;
+  };
+  lastActivityAt: string | Date;
+};
+
+type SubscriptionFeedRow = {
+  id: string;
+  expiresAt: string | Date;
+  creator: {
+    username: string;
+    contents: unknown[];
+  };
+};
+
+type HistoryFeedRow = {
+  id: string;
+  type: string;
+  amount: string;
+  timestamp: string | Date;
+  creator?: {
+    username?: string;
+  } | null;
+  content?: {
+    title?: string;
+  } | null;
+};
+
+type FeedRowsByTab = {
+  all: AllFeedRow[];
+  subscriptions: SubscriptionFeedRow[];
+  history: HistoryFeedRow[];
+};
+
 export function FeedView() {
   const [tab, setTab] = useState<Tab>("all");
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<FeedRowsByTab[Tab]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,8 +61,9 @@ export function FeedView() {
         if (!response.ok) {
           throw new Error(payload.error ?? "Could not load feed.");
         }
+
         if (active) {
-          setRows(payload.data ?? []);
+          setRows((payload.data ?? []) as FeedRowsByTab[Tab]);
         }
       })
       .catch((err: unknown) => {
@@ -70,36 +110,34 @@ export function FeedView() {
       )}
 
       <div className="grid gap-4">
-        {rows.map((row) => {
-          if (tab === "subscriptions") {
-            return (
-              <article key={row.id} className="rounded-2xl border border-border bg-card p-5">
-                <div className="mb-2 flex items-center justify-between">
-                  <h3 className="font-semibold">@{row.creator.username}</h3>
-                  <span className="text-xs text-muted">Expires {new Date(row.expiresAt).toLocaleDateString()}</span>
-                </div>
-                <p className="text-sm text-ink/75">{row.creator.contents.length} recent drops</p>
-              </article>
-            );
-          }
+        {tab === "subscriptions" &&
+          (rows as SubscriptionFeedRow[]).map((row) => (
+            <article key={row.id} className="rounded-2xl border border-border bg-card p-5">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="font-semibold">@{row.creator.username}</h3>
+                <span className="text-xs text-muted">Expires {new Date(row.expiresAt).toLocaleDateString()}</span>
+              </div>
+              <p className="text-sm text-ink/75">{row.creator.contents.length} recent drops</p>
+            </article>
+          ))}
 
-          if (tab === "history") {
-            return (
-              <article key={row.id} className="rounded-2xl border border-border bg-card p-5">
-                <div className="mb-2 flex items-center justify-between gap-4">
-                  <h3 className="font-semibold">{row.type.replaceAll("_", " ")}</h3>
-                  <span className="text-sm">{toUsd(row.amount)}</span>
-                </div>
-                <p className="text-sm text-ink/75">
-                  {row.creator?.username ? `Creator: @${row.creator.username}` : ""}
-                  {row.content?.title ? ` | Content: ${row.content.title}` : ""}
-                </p>
-                <p className="mt-1 text-xs text-muted">{new Date(row.timestamp).toLocaleString()}</p>
-              </article>
-            );
-          }
+        {tab === "history" &&
+          (rows as HistoryFeedRow[]).map((row) => (
+            <article key={row.id} className="rounded-2xl border border-border bg-card p-5">
+              <div className="mb-2 flex items-center justify-between gap-4">
+                <h3 className="font-semibold">{row.type.replaceAll("_", " ")}</h3>
+                <span className="text-sm">{toUsd(row.amount)}</span>
+              </div>
+              <p className="text-sm text-ink/75">
+                {row.creator?.username ? `Creator: @${row.creator.username}` : ""}
+                {row.content?.title ? ` | Content: ${row.content.title}` : ""}
+              </p>
+              <p className="mt-1 text-xs text-muted">{new Date(row.timestamp).toLocaleString()}</p>
+            </article>
+          ))}
 
-          return (
+        {tab === "all" &&
+          (rows as AllFeedRow[]).map((row) => (
             <article key={row.contentId} className="rounded-2xl border border-border bg-card p-5">
               <div className="mb-2 flex items-center justify-between gap-4">
                 <h3 className="font-semibold">{row.title}</h3>
@@ -110,8 +148,7 @@ export function FeedView() {
               </p>
               <p className="mt-1 text-xs text-muted">Last activity: {new Date(row.lastActivityAt).toLocaleString()}</p>
             </article>
-          );
-        })}
+          ))}
       </div>
     </section>
   );

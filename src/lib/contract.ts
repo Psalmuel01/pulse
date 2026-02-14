@@ -95,10 +95,11 @@ export async function updateSubscriptionFeeContractCall({
   return true;
 }
 
-export async function isActiveSubscriberContractRead(_: {
+export async function isActiveSubscriberContractRead(params: {
   subscriberWallet: string;
   creatorWallet: string;
 }) {
+  void params;
   // Hook to chain read-only function `isActiveSubscriber`.
   // Return `null` if no direct chain read is configured.
   return null;
