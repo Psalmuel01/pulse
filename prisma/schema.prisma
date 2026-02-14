@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ContentType {
+  ARTICLE
+  VIDEO
+  MUSIC
+}
+
+enum TransactionType {
+  SUBSCRIPTION
+  PAY_PER_VIEW
+  WITHDRAWAL
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String?        @unique
+  phone         String?        @unique
+  privyId       String?        @unique
+  walletAddress String?        @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  creator       Creator?
+  subscriptions Subscription[]
+  unlocks       Unlock[]
+  transactions  Transaction[]
+  views         ContentView[]
+}
+
+model Creator {
+  id              String         @id @default(cuid())
+  userId          String         @unique
+  username        String         @unique
+  category        String
+  walletAddress   String
+  subscriptionFee Decimal        @db.Decimal(18, 6)
+  lifetimeEarnings Decimal       @default(0) @db.Decimal(18, 6)
+  availableEarnings Decimal      @default(0) @db.Decimal(18, 6)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contents        Content[]
+  subscriptions   Subscription[]
+  transactions    Transaction[]
+}
+
+model Content {
+  id                 String      @id @default(cuid())
+  title              String
+  description        String?
+  type               ContentType
+  creatorId          String
+  price              Decimal     @db.Decimal(18, 6)
+  onlyForSubscribers Boolean     @default(false)
+  storagePath        String
+  thumbnailPath      String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  creator            Creator     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  unlocks            Unlock[]
+  transactions       Transaction[]
+  views              ContentView[]
+}
+
+model Subscription {
+  id             String             @id @default(cuid())
+  userId         String
+  creatorId      String
+  startsAt       DateTime           @default(now())
+  expiresAt      DateTime
+  status         SubscriptionStatus @default(ACTIVE)
+  amount         Decimal            @db.Decimal(18, 6)
+  onChainTxHash  String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creator        Creator            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([userId, creatorId])
+  @@index([expiresAt])
+}
+
+model Unlock {
+  id             String      @id @default(cuid())
+  userId         String
+  contentId      String
+  viewsRemaining Int         @default(1)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  onChainTxHash  String
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content        Content     @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, contentId])
+}
+
+model Transaction {
+  id            String            @id @default(cuid())
+  userId        String
+  creatorId     String
+  contentId     String?
+  type          TransactionType
+  amount        Decimal           @db.Decimal(18, 6)
+  status        TransactionStatus @default(CONFIRMED)
+  timestamp     DateTime          @default(now())
+  onChainTxHash String            @unique
+
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  creator       Creator           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  content       Content?          @relation(fields: [contentId], references: [id], onDelete: SetNull)
+
+  @@index([userId, timestamp])
+  @@index([creatorId, timestamp])
+}
+
+model ContentView {
+  id        String   @id @default(cuid())
+  userId    String
+  contentId String
+  viewedAt  DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, viewedAt])
+}
