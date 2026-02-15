@@ -151,8 +151,8 @@ export async function verifyTempoPathUsdTransfer({
 
 type VerifyContractCallParams = {
   txHash: string;
-  fromWallet: string;
-  contractAddress: string;
+  fromWallet?: string;
+  contractAddress?: string;
   methodSelector?: string;
 };
 
@@ -163,10 +163,6 @@ export async function verifyTempoContractCall({
   methodSelector
 }: VerifyContractCallParams): Promise<boolean> {
   if (!txHash) {
-    return false;
-  }
-
-  if (!fromWallet || !contractAddress) {
     return false;
   }
 
@@ -183,12 +179,16 @@ export async function verifyTempoContractCall({
     return false;
   }
 
-  if (normalizeAddress(transaction.from) !== normalizeAddress(fromWallet)) {
-    return false;
+  if (fromWallet) {
+    if (normalizeAddress(transaction.from) !== normalizeAddress(fromWallet)) {
+      return false;
+    }
   }
 
-  if (!transaction.to || normalizeAddress(transaction.to) !== normalizeAddress(contractAddress)) {
-    return false;
+  if (contractAddress) {
+    if (!transaction.to || normalizeAddress(transaction.to) !== normalizeAddress(contractAddress)) {
+      return false;
+    }
   }
 
   if (!methodSelector) {

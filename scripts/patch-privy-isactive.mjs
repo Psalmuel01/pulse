@@ -3,8 +3,20 @@ import { join } from "node:path";
 
 const root = process.cwd();
 const privyEsmDir = join(root, "node_modules", "@privy-io", "react-auth", "dist", "esm");
-const targetSnippet = 'isActive:l?"true":"false"';
-const replacementSnippet = 'isactive:l?"true":"false"';
+const patches = [
+  {
+    name: "isActive DOM prop warning",
+    target: 'isActive:l?"true":"false"',
+    replacement: 'isactive:l?"true":"false"'
+  },
+  {
+    name: "missing key warning in CustomLandingScreenView",
+    target:
+      '/*#__PURE__*/return e(O,{recent:!0,index:i,data:{wallets:X,walletChainType:l,handleWalletClick(e){c((t=>({...t,externalConnectWallet:{walletList:f,walletChainType:l,preSelectedWalletId:e.id}}))),h(a?"ConnectOnlyLandingScreen":"AuthenticateWithWalletScreen")}}})',
+    replacement:
+      '/*#__PURE__*/return e(O,{recent:!0,index:i,data:{wallets:X,walletChainType:l,handleWalletClick(e){c((t=>({...t,externalConnectWallet:{walletList:f,walletChainType:l,preSelectedWalletId:e.id}}))),h(a?"ConnectOnlyLandingScreen":"AuthenticateWithWalletScreen")}}},j.normalize(t))'
+  }
+];
 
 function walk(dir) {
   const entries = readdirSync(dir);
@@ -25,30 +37,48 @@ function walk(dir) {
   return files;
 }
 
-function patchPrivyIsActiveWarning() {
+function patchPrivyWarnings() {
   if (!existsSync(privyEsmDir)) {
     return;
   }
 
   const files = walk(privyEsmDir);
-  let patchedFiles = 0;
+  let totalReplacements = 0;
+  const changedWarnings = new Set();
 
   for (const filePath of files) {
-    const source = readFileSync(filePath, "utf8");
-    if (!source.includes(targetSnippet)) {
-      continue;
+    let source = readFileSync(filePath, "utf8");
+    let next = source;
+
+    for (const patch of patches) {
+      if (!next.includes(patch.target)) {
+        continue;
+      }
+
+      const updated = next.replaceAll(patch.target, patch.replacement);
+      if (updated !== next) {
+        const replacements = (next.match(new RegExp(escapeRegExp(patch.target), "g")) ?? []).length;
+        totalReplacements += replacements;
+        changedWarnings.add(patch.name);
+      }
+
+      next = updated;
     }
 
-    const next = source.replaceAll(targetSnippet, replacementSnippet);
     if (next !== source) {
       writeFileSync(filePath, next, "utf8");
-      patchedFiles += 1;
     }
   }
 
-  if (patchedFiles > 0) {
-    console.log(`[postinstall] patched Privy isActive warning in ${patchedFiles} file(s).`);
+  if (totalReplacements > 0) {
+    console.log(
+      `[postinstall] patched Privy warnings (${[...changedWarnings].join(", ")}) with ${totalReplacements} replacement(s).`
+    );
   }
 }
 
-patchPrivyIsActiveWarning();
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+patchPrivyWarnings();

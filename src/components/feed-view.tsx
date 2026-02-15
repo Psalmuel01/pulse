@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuthedFetch } from "@/hooks/use-authed-fetch";
 import { toUsd } from "@/lib/utils";
 
@@ -46,6 +47,7 @@ type FeedRowsByTab = {
 };
 
 export function FeedView() {
+  const router = useRouter();
   const authedFetch = useAuthedFetch();
   const [tab, setTab] = useState<Tab>("all");
   const [rows, setRows] = useState<FeedRowsByTab[Tab]>([]);
@@ -143,7 +145,16 @@ export function FeedView() {
             <article key={row.contentId} className="rounded-2xl border border-border bg-card p-5">
               <div className="mb-2 flex items-center justify-between gap-4">
                 <h3 className="font-semibold">{row.title}</h3>
-                <span className="text-sm">{toUsd(row.price)}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">{toUsd(row.price)}</span>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/content/${encodeURIComponent(row.contentId)}`)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold"
+                  >
+                    View
+                  </button>
+                </div>
               </div>
               <p className="text-sm text-ink/75">
                 {row.type.toLowerCase()} by @{row.creator.username}

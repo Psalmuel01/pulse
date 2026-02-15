@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ContentCard } from "@/components/content-card";
 import { useAuthedFetch } from "@/hooks/use-authed-fetch";
 import { useTempoPayments } from "@/hooks/use-tempo-payments";
@@ -38,6 +39,7 @@ export function CreatorProfileClient({
   initialSubscribed,
   initialUnlockedIds
 }: CreatorProfileClientProps) {
+  const router = useRouter();
   const authedFetch = useAuthedFetch();
   const { subscribe, unlockContent, isSubmitting } = useTempoPayments();
   const [isSubscribed, setIsSubscribed] = useState(initialSubscribed);
@@ -175,30 +177,8 @@ export function CreatorProfileClient({
   async function handleView(contentId: string) {
     setBusyKey(`view-${contentId}`);
     setStatusMessage(null);
-
-    const response = await authedFetch(`/api/contents/${contentId}/access`, {
-      method: "POST"
-    });
-
-    const payload = await response.json();
-
-    if (!response.ok) {
-      setStatusMessage(payload.error ?? "Unable to access content.");
-      setBusyKey(null);
-      return;
-    }
-
-    window.open(payload.signedUrl, "_blank", "noopener,noreferrer");
-
-    if (payload.accessMode === "payPerView") {
-      setUnlockedIds((current) => {
-        const next = new Set(current);
-        next.delete(contentId);
-        return next;
-      });
-    }
-
-    setStatusMessage("Signed URL issued. It expires shortly.");
+    router.push(`/content/${encodeURIComponent(contentId)}`);
+    setStatusMessage("Opening content viewer...");
     setBusyKey(null);
   }
 

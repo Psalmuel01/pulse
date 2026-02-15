@@ -36,7 +36,7 @@ export function ThemeToggle() {
       aria-label="Toggle theme"
     >
       {isDark ? <SunMedium size={16} /> : <MoonStar size={16} />}
-      <span>{isDark ? "Light" : "Dark"}</span>
+      {/* <span>{isDark ? "Light" : "Dark"}</span> */}
     </button>
   );
 }

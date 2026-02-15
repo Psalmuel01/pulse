@@ -48,21 +48,25 @@ type Tab = "analytics" | "contents" | "subscribers";
 
 type ContentType = "ARTICLE" | "VIDEO" | "MUSIC";
 
-function detectContentTypeFromMime(mimeType: string): ContentType | null {
-  const normalized = mimeType.toLowerCase();
-  if (normalized === "application/pdf") {
-    return null;
+function getFileAcceptForType(type: ContentType) {
+  if (type === "VIDEO") {
+    return "video/*";
   }
-  if (normalized.startsWith("video/")) {
-    return "VIDEO";
+  if (type === "MUSIC") {
+    return "audio/*";
   }
-  if (normalized.startsWith("audio/")) {
-    return "MUSIC";
+  return "";
+}
+
+function isFileTypeValidForContent(type: ContentType, file: File) {
+  const mime = file.type.toLowerCase();
+  if (type === "VIDEO") {
+    return mime.startsWith("video/");
   }
-  if (normalized.startsWith("text/")) {
-    return "ARTICLE";
+  if (type === "MUSIC") {
+    return mime.startsWith("audio/");
   }
-  return null;
+  return false;
 }
 
 export function CreatorDashboardClient() {
@@ -85,12 +89,13 @@ export function CreatorDashboardClient() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [detectedType, setDetectedType] = useState<ContentType>("ARTICLE");
+  const [contentType, setContentType] = useState<ContentType>("ARTICLE");
   const [price, setPrice] = useState("0");
   const [onlyForSubscribers, setOnlyForSubscribers] = useState(false);
-  const [storagePath, setStoragePath] = useState("");
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [articleBody, setArticleBody] = useState("");
+  const [publishing, setPublishing] = useState(false);
   const balances = useTempoBalances(data?.creator.walletAddress);
 
   const loadDashboard = useCallback(async () => {
@@ -205,134 +210,120 @@ export function CreatorDashboardClient() {
     }
   }
 
-  async function handleAssetUpload() {
-    if (!selectedFile) {
-      setStatus("Choose a file before uploading.");
-      return;
-    }
-
-    if (detectedType === "ARTICLE") {
-      setStatus("Article content is text-based. No file upload is needed.");
-      return;
-    }
-
-    setStatus(null);
-
-    const urlResponse = await authedFetch("/api/contents/upload-url", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        fileName: selectedFile.name,
-        mimeType: selectedFile.type
-      })
-    });
-
-    const urlPayload = await urlResponse.json();
-
-    if (!urlResponse.ok) {
-      setStatus(urlPayload.error ?? "Could not request upload URL.");
-      return;
-    }
-
-    const uploadResult = await fetch(urlPayload.signedUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": selectedFile.type
-      },
-      body: selectedFile
-    });
-
-    if (!uploadResult.ok) {
-      setStatus("Upload failed.");
-      return;
-    }
-
-    setStoragePath(urlPayload.storagePath);
-    setStatus(`File uploaded. Detected content type: ${detectedType.toLowerCase()}.`);
-  }
-
   async function handleCreateContent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    setStatus(null);
-
-    if (detectedType !== "ARTICLE" && !storagePath) {
-      setStatus("Upload your file first before publishing.");
+    if (publishing) {
       return;
     }
 
-    if (detectedType === "ARTICLE" && !articleBody.trim() && !storagePath) {
+    setStatus(null);
+
+    if (contentType === "ARTICLE" && !articleBody.trim()) {
       setStatus("Enter article text before publishing.");
       return;
     }
 
-    const response = await authedFetch("/api/contents", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        title,
-        description,
-        type: detectedType,
-        price: Number(price),
-        onlyForSubscribers,
-        storagePath: storagePath || undefined,
-        articleBody: detectedType === "ARTICLE" ? articleBody : undefined
-      })
-    });
-
-    const payload = await response.json();
-
-    if (!response.ok) {
-      setStatus(payload.error ?? "Could not publish content.");
+    if (contentType !== "ARTICLE" && !selectedFile) {
+      setStatus(`Choose a ${contentType.toLowerCase()} file before publishing.`);
       return;
     }
 
-    setStatus("Content published.");
-    setTitle("");
-    setDescription("");
-    setPrice("0");
-    setOnlyForSubscribers(false);
-    setStoragePath("");
-    setSelectedFile(null);
-    setArticleBody("");
-    setDetectedType("ARTICLE");
-    await loadDashboard();
+    try {
+      setPublishing(true);
+      let resolvedStoragePath: string | undefined;
+
+      if (contentType !== "ARTICLE" && selectedFile) {
+        if (!isFileTypeValidForContent(contentType, selectedFile)) {
+          setStatus(`Selected file does not match content type ${contentType.toLowerCase()}.`);
+          return;
+        }
+
+        setStatus("Preparing upload...");
+        const urlResponse = await authedFetch("/api/contents/upload-url", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            fileName: selectedFile.name,
+            mimeType: selectedFile.type
+          })
+        });
+
+        const urlPayload = await urlResponse.json();
+        if (!urlResponse.ok) {
+          setStatus(urlPayload.error ?? "Could not request upload URL.");
+          return;
+        }
+
+        setStatus("Uploading media...");
+        const uploadResult = await fetch(urlPayload.signedUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": selectedFile.type
+          },
+          body: selectedFile
+        });
+
+        if (!uploadResult.ok) {
+          setStatus("Media upload failed.");
+          return;
+        }
+
+        resolvedStoragePath = urlPayload.storagePath;
+      }
+
+      setStatus("Publishing content...");
+      const response = await authedFetch("/api/contents", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          title,
+          description,
+          type: contentType,
+          price: Number(price),
+          onlyForSubscribers,
+          storagePath: resolvedStoragePath,
+          articleBody: contentType === "ARTICLE" ? articleBody : undefined
+        })
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setStatus(payload.error ?? "Could not publish content.");
+        return;
+      }
+
+      setStatus("Content published.");
+      setTitle("");
+      setDescription("");
+      setPrice("0");
+      setOnlyForSubscribers(false);
+      setSelectedFile(null);
+      setArticleBody("");
+      setFileInputKey((current) => current + 1);
+      setContentType("ARTICLE");
+      await loadDashboard();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not publish content.");
+    } finally {
+      setPublishing(false);
+    }
   }
 
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null;
     setSelectedFile(file);
-    setStoragePath("");
-
-    if (!file) {
-      setDetectedType("ARTICLE");
-      return;
-    }
-
-    const nextType = detectContentTypeFromMime(file.type);
-    if (!nextType) {
-      setStatus("Unsupported file type. Upload video/audio/text files only. PDFs are disabled.");
+    if (file && !isFileTypeValidForContent(contentType, file)) {
+      setStatus(`Selected file does not match content type ${contentType.toLowerCase()}.`);
       setSelectedFile(null);
       event.target.value = "";
       return;
     }
-
-    setDetectedType(nextType);
-    setStatus(`Detected ${nextType.toLowerCase()} file.`);
-
-    if (nextType === "ARTICLE") {
-      const text = await file.text().catch(() => "");
-      if (!text.trim()) {
-        setStatus("Text file is empty. Add article text before publishing.");
-      } else {
-        setArticleBody(text);
-        setStatus("Text file loaded into article content.");
-      }
-    }
+    setStatus(file ? `${file.name} selected.` : null);
   }
 
   if (loading) {
@@ -481,8 +472,8 @@ export function CreatorDashboardClient() {
         </div>
       )}
 
-      {tab === "contents" && (
-        <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+	      {tab === "contents" && (
+	        <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
           <div className="rounded-2xl border border-border bg-card p-5">
             <h3 className="font-semibold">Published Content</h3>
             <div className="mt-3 grid gap-3">
@@ -503,37 +494,34 @@ export function CreatorDashboardClient() {
             </div>
           </div>
 
-          <form onSubmit={handleCreateContent} className="rounded-2xl border border-border bg-card p-5 space-y-3">
-            <h3 className="font-semibold">Upload New Content</h3>
+	          <form onSubmit={handleCreateContent} className="space-y-3 rounded-2xl border border-border bg-card p-5">
+	            <h3 className="font-semibold">Upload New Content</h3>
 
-            <label className="block text-sm">
-              <span className="mb-1 block text-ink/80">Media file</span>
-              <input
-                type="file"
-                accept="video/*,audio/*,text/*"
-                onChange={handleFileChange}
-                className="w-full rounded-xl border border-border bg-canvas px-3 py-2"
-              />
-            </label>
+	            <label className="block text-sm">
+	              <span className="mb-1 block text-ink/80">Content type</span>
+	              <select
+	                value={contentType}
+	                onChange={(event) => {
+	                  const nextType = event.target.value as ContentType;
+	                  setContentType(nextType);
+	                  setSelectedFile(null);
+	                  setFileInputKey((current) => current + 1);
+	                  if (nextType !== "ARTICLE") {
+	                    setArticleBody("");
+	                  }
+	                }}
+	                className="w-full rounded-xl border border-border bg-canvas px-4 py-2"
+	              >
+	                <option value="ARTICLE">Article</option>
+	                <option value="MUSIC">Music</option>
+	                <option value="VIDEO">Video</option>
+	              </select>
+	            </label>
 
-            <button
-              type="button"
-              onClick={handleAssetUpload}
-              disabled={!selectedFile || detectedType === "ARTICLE"}
-              className="rounded-xl border border-border px-4 py-2 text-sm font-semibold"
-            >
-              Upload File to Supabase (Video/Music)
-            </button>
-
-            <div className="rounded-xl border border-dashed border-border bg-canvas/70 px-4 py-3 text-xs text-ink/80">
-              <p>Detected type: {detectedType.toLowerCase()}</p>
-              {storagePath ? <p className="mt-1 break-all">Storage path: {storagePath}</p> : null}
-            </div>
-
-            <label className="block text-sm">
-              <span className="mb-1 block text-ink/80">Title</span>
-              <input
-                required
+	            <label className="block text-sm">
+	              <span className="mb-1 block text-ink/80">Title</span>
+	              <input
+	                required
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 className="w-full rounded-xl border border-border bg-canvas px-4 py-2"
@@ -547,19 +535,39 @@ export function CreatorDashboardClient() {
                 onChange={(event) => setDescription(event.target.value)}
                 rows={3}
                 className="w-full rounded-xl border border-border bg-canvas px-4 py-2"
-              />
-            </label>
+	              />
+	            </label>
 
-            <label className="block text-sm">
-              <span className="mb-1 block text-ink/80">Article Text (required for article posts)</span>
-              <textarea
-                value={articleBody}
-                onChange={(event) => setArticleBody(event.target.value)}
-                rows={6}
-                className="w-full rounded-xl border border-border bg-canvas px-4 py-2"
-                placeholder="Write or paste your article text here."
-              />
-            </label>
+	            {contentType === "ARTICLE" ? (
+	              <label className="block text-sm">
+	                <span className="mb-1 block text-ink/80">Article Text</span>
+	                <textarea
+	                  required
+	                  value={articleBody}
+	                  onChange={(event) => setArticleBody(event.target.value)}
+	                  rows={10}
+	                  className="w-full rounded-xl border border-border bg-canvas px-4 py-2"
+	                  placeholder="Write or paste your article text here."
+	                />
+	              </label>
+	            ) : (
+	              <label className="block text-sm">
+	                <span className="mb-1 block text-ink/80">
+	                  {contentType === "VIDEO" ? "Video file" : "Music file"}
+	                </span>
+	                <input
+	                  key={fileInputKey}
+	                  required
+	                  type="file"
+	                  accept={getFileAcceptForType(contentType)}
+	                  onChange={handleFileChange}
+	                  className="w-full rounded-xl border border-border bg-canvas px-3 py-2"
+	                />
+	                <span className="mt-1 block text-xs text-muted">
+	                  File uploads happen automatically when you click Publish Content.
+	                </span>
+	              </label>
+	            )}
 
             <div className="grid grid-cols-2 gap-3">
               <label className="block text-sm">
@@ -585,15 +593,16 @@ export function CreatorDashboardClient() {
               Only for subscribers
             </label>
 
-            <button
-              type="submit"
-              className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
-            >
-              Publish Content
-            </button>
-          </form>
-        </div>
-      )}
+	            <button
+	              type="submit"
+                disabled={publishing}
+	              className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+	            >
+	              {publishing ? "Publishing..." : "Publish Content"}
+	            </button>
+	          </form>
+	        </div>
+	      )}
 
       {tab === "subscribers" && (
         <div className="rounded-2xl border border-border bg-card p-5">

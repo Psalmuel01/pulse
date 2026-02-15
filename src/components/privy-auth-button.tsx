@@ -80,7 +80,7 @@ function PrivyConfiguredAuthButton() {
           <p className="mt-1 text-[10px] text-muted">
             Wallet source: {wallets.find((wallet) => wallet.walletClientType === "privy")?.address ? "Privy embedded" : "Connected wallet"}{" "}
             |{" "}
-            Gas ({balances.gas.symbol}): {balances.loading ? "Loading..." : balances.gas.value} | Payment (
+            Payment (
             {balances.payment.symbol}): {balances.loading ? "Loading..." : balances.payment.value}
           </p>
         </div>

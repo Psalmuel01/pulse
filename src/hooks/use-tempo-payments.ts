@@ -50,6 +50,7 @@ const TWO_BIGINT = BigInt(2);
 const HUNDRED_BIGINT = BigInt(100);
 const GAS_BUFFER_PERCENT = BigInt(120);
 const MIN_GAS_TOKEN_APPROVE = BigInt("120000");
+const MIN_GAS_TOKEN_TRANSFER = BigInt("120000");
 const MIN_GAS_REGISTER_CREATOR = BigInt("500000");
 const MIN_GAS_SUBSCRIBE = BigInt("700000");
 const MIN_GAS_UPDATE_SUBSCRIPTION_FEE = BigInt("300000");
@@ -137,6 +138,16 @@ export function useTempoPayments() {
     return hash;
   }
 
+  async function getPendingNonce(
+    publicClient: Awaited<ReturnType<typeof getClients>>["publicClient"],
+    account: Address
+  ) {
+    return publicClient.getTransactionCount({
+      address: account,
+      blockTag: "pending"
+    });
+  }
+
   async function resolveFeeOverrides(
     publicClient: Awaited<ReturnType<typeof getClients>>["publicClient"]
   ) {
@@ -204,6 +215,7 @@ export function useTempoPayments() {
         args: [amount],
         account,
         gas,
+        nonce: await getPendingNonce(publicClient, account),
         ...feeOverrides
       });
 
@@ -232,6 +244,7 @@ export function useTempoPayments() {
         args: [amount],
         account,
         gas,
+        nonce: await getPendingNonce(publicClient, account),
         ...feeOverrides
       });
 
@@ -260,6 +273,7 @@ export function useTempoPayments() {
         args: [amount],
         account,
         gas,
+        nonce: await getPendingNonce(publicClient, account),
         ...feeOverrides
       });
 
@@ -300,6 +314,7 @@ export function useTempoPayments() {
           args: [contractAddress, amount],
           account,
           gas: approveGas,
+          nonce: await getPendingNonce(publicClient, account),
           ...feeOverrides
         });
         await publicClient.waitForTransactionReceipt({ hash: approveHash });
@@ -319,6 +334,7 @@ export function useTempoPayments() {
         args: [creatorWallet as Address, amount],
         account,
         gas: subscribeGas,
+        nonce: await getPendingNonce(publicClient, account),
         ...feeOverrides
       });
 
@@ -332,17 +348,40 @@ export function useTempoPayments() {
         throw new Error("Creator wallet address is invalid.");
       }
 
-      const { publicClient, walletClient } = await getClients();
+      const { account, publicClient, walletClient } = await getClients();
       const amount = await getPathUsdAmount(publicClient, amountUsd);
       const memoHex = memo?.trim() ? stringToHex(memo.trim().slice(0, 31), { size: 32 }) : undefined;
-      const result = await walletClient.token.transferSync({
-        to: toWallet as Address,
-        amount,
-        token: pathUsd,
-        memo: memoHex
+
+      const request = memoHex
+        ? {
+            address: pathUsd,
+            abi: tip20Abi,
+            functionName: "transferWithMemo" as const,
+            args: [toWallet as Address, amount, memoHex],
+            account
+          }
+        : {
+            address: pathUsd,
+            abi: tip20Abi,
+            functionName: "transfer" as const,
+            args: [toWallet as Address, amount],
+            account
+          };
+
+      const [feeOverrides, gas, nonce] = await Promise.all([
+        resolveFeeOverrides(publicClient),
+        estimateGasWithBuffer(publicClient, request, MIN_GAS_TOKEN_TRANSFER),
+        getPendingNonce(publicClient, account)
+      ]);
+
+      const hash = await walletClient.writeContract({
+        ...request,
+        gas,
+        nonce,
+        ...feeOverrides
       });
 
-      return result.receipt.transactionHash;
+      return waitForHash(publicClient, hash);
     });
   }
 
