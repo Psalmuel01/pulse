@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { CreatorProfileClient } from "@/components/creator-profile-client";
+import { PrivyAuthGate } from "@/components/privy-auth-gate";
 import { getCurrentUserFromServerContext } from "@/lib/auth";
 import { db, isDatabaseConfigured } from "@/lib/db";
 import { getDemoCreatorByUsername } from "@/lib/demo-data";
@@ -14,24 +15,29 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     }
 
     return (
-      <CreatorProfileClient
-        creator={{
-          id: creator.id,
-          username: creator.username,
-          category: creator.category,
-          subscriptionFee: creator.subscriptionFee,
-          subscriberCount: creator.subscriberCount
-        }}
-        contents={creator.contents.map((content) => ({
-          id: content.id,
-          title: content.title,
-          type: content.type,
-          price: content.price,
-          onlyForSubscribers: content.onlyForSubscribers
-        }))}
-        initialSubscribed={false}
-        initialUnlockedIds={[]}
-      />
+      <PrivyAuthGate
+        title="Creator Profile"
+        description="Create an account to subscribe, unlock drops, and access premium content."
+      >
+        <CreatorProfileClient
+          creator={{
+            id: creator.id,
+            username: creator.username,
+            category: creator.category,
+            subscriptionFee: creator.subscriptionFee,
+            subscriberCount: creator.subscriberCount
+          }}
+          contents={creator.contents.map((content) => ({
+            id: content.id,
+            title: content.title,
+            type: content.type,
+            price: content.price,
+            onlyForSubscribers: content.onlyForSubscribers
+          }))}
+          initialSubscribed={false}
+          initialUnlockedIds={[]}
+        />
+      </PrivyAuthGate>
     );
   }
 
@@ -77,23 +83,28 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
   const isSubscribed = creator.subscriptions.some((subscription) => subscription.userId === user.id);
 
   return (
-    <CreatorProfileClient
-      creator={{
-        id: creator.id,
-        username: creator.username,
-        category: creator.category,
-        subscriptionFee: creator.subscriptionFee.toString(),
-        subscriberCount: creator.subscriptions.length
-      }}
-      contents={creator.contents.map((content) => ({
-        id: content.id,
-        title: content.title,
-        type: content.type,
-        price: content.price.toString(),
-        onlyForSubscribers: content.onlyForSubscribers
-      }))}
-      initialSubscribed={isSubscribed}
-      initialUnlockedIds={userUnlocks.map((unlock) => unlock.contentId)}
-    />
+    <PrivyAuthGate
+      title="Creator Profile"
+      description="Create an account to subscribe, unlock drops, and access premium content."
+    >
+      <CreatorProfileClient
+        creator={{
+          id: creator.id,
+          username: creator.username,
+          category: creator.category,
+          subscriptionFee: creator.subscriptionFee.toString(),
+          subscriberCount: creator.subscriptions.length
+        }}
+        contents={creator.contents.map((content) => ({
+          id: content.id,
+          title: content.title,
+          type: content.type,
+          price: content.price.toString(),
+          onlyForSubscribers: content.onlyForSubscribers
+        }))}
+        initialSubscribed={isSubscribed}
+        initialUnlockedIds={userUnlocks.map((unlock) => unlock.contentId)}
+      />
+    </PrivyAuthGate>
   );
 }

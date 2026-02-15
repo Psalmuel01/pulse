@@ -4,8 +4,9 @@ import { network } from "hardhat";
 describe("PulseSubscriptions", function () {
   const DECIMALS = 6;
   const THIRTY_DAYS = 30 * 24 * 60 * 60;
+  const MOCK_QUOTE_TOKEN = "0x0000000000000000000000000000000000000007";
 
-  function usd(amount: string) {
+  function pathUsd(amount: string) {
     return ethers.parseUnits(amount, DECIMALS);
   }
 
@@ -21,17 +22,23 @@ describe("PulseSubscriptions", function () {
     ({ ethers, networkHelpers } = await network.connect());
     [owner, creator, subscriber] = await ethers.getSigners();
 
-    token = await ethers.deployContract("MockUSD", ["Mock USD", "mUSD", DECIMALS]);
+    token = await ethers.deployContract("MockPathUSD", [
+      "Mock pathUSD",
+      "pathUSD",
+      DECIMALS,
+      "USD",
+      MOCK_QUOTE_TOKEN
+    ]);
     await token.waitForDeployment();
 
     pulse = await ethers.deployContract("PulseSubscriptions", [await token.getAddress()]);
     await pulse.waitForDeployment();
 
-    await token.mint(subscriber.address, usd("1000"));
+    await token.mint(subscriber.address, pathUsd("1000"));
   });
 
   it("registerCreator sets initial fee and zeroes earnings", async function () {
-    const initialFee = usd("10");
+    const initialFee = pathUsd("10");
 
     await expect(pulse.connect(creator).registerCreator(initialFee))
       .to.emit(pulse, "CreatorRegistered")
@@ -44,8 +51,8 @@ describe("PulseSubscriptions", function () {
     expect(state.registered).to.equal(true);
   });
 
-  it("subscribe transfers USD, updates earnings and stamps 30-day expiry", async function () {
-    const fee = usd("10");
+  it("subscribe transfers pathUSD, updates earnings and stamps 30-day expiry", async function () {
+    const fee = pathUsd("10");
 
     await pulse.connect(creator).registerCreator(fee);
 
@@ -74,9 +81,9 @@ describe("PulseSubscriptions", function () {
     expect(stateAfterResubscribe.totalEarnings).to.equal(fee * 2n);
   });
 
-  it("withdrawCreatorEarning lets creator pull accumulated USD", async function () {
-    const fee = usd("10");
-    const withdrawAmount = usd("4");
+  it("withdrawCreatorEarning lets creator pull accumulated pathUSD", async function () {
+    const fee = pathUsd("10");
+    const withdrawAmount = pathUsd("4");
 
     await pulse.connect(creator).registerCreator(fee);
     await token.connect(subscriber).approve(await pulse.getAddress(), fee);
@@ -95,8 +102,8 @@ describe("PulseSubscriptions", function () {
   });
 
   it("updateSubscriptionFee and isActiveSubscriber reflect current state", async function () {
-    const initialFee = usd("10");
-    const newFee = usd("15");
+    const initialFee = pathUsd("10");
+    const newFee = pathUsd("15");
 
     await pulse.connect(creator).registerCreator(initialFee);
     await pulse.connect(creator).updateSubscriptionFee(newFee);

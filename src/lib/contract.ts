@@ -1,4 +1,4 @@
-import { verifyTempoStablecoinTransfer } from "@/lib/tempo";
+import { verifyTempoPathUsdTransfer } from "@/lib/tempo";
 import { env } from "@/lib/env";
 
 type SubscribeContractParams = {
@@ -48,10 +48,10 @@ export async function subscribeContractCall({
   creatorWallet,
   amountUsd
 }: SubscribeContractParams) {
-  // Solidity contract flow collects stablecoin in the contract and tracks creator earnings internally.
+  // Contract flow collects pathUSD in the contract and tracks creator earnings internally.
   const receiver = env.pulseSubscriptionsContractAddress ?? creatorWallet;
 
-  return verifyTempoStablecoinTransfer({
+  return verifyTempoPathUsdTransfer({
     txHash,
     fromWallet: subscriberWallet,
     toWallet: receiver,

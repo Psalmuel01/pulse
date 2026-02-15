@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { LandingPageClient } from "@/components/landing-page-client";
 
 export default function HomePage() {
-  redirect("/explore");
+  return <LandingPageClient />;
 }

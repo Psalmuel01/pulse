@@ -63,19 +63,19 @@ function hexToBigInt(hex: string) {
   }
 }
 
-type VerifyStablecoinTransferParams = {
+type VerifyPathUsdTransferParams = {
   txHash: string;
   fromWallet: string;
   toWallet: string;
   amount: string;
 };
 
-export async function verifyTempoStablecoinTransfer({
+export async function verifyTempoPathUsdTransfer({
   txHash,
   fromWallet,
   toWallet,
   amount
-}: VerifyStablecoinTransferParams): Promise<boolean> {
+}: VerifyPathUsdTransferParams): Promise<boolean> {
   if (!txHash) {
     return false;
   }
@@ -90,14 +90,15 @@ export async function verifyTempoStablecoinTransfer({
     return false;
   }
 
-  if (!env.tempoStablecoinAddress) {
+  if (!env.tempoPathUsdAddress) {
     return false;
   }
 
-  const normalizedToken = normalizeAddress(env.tempoStablecoinAddress);
+  const normalizedToken = normalizeAddress(env.tempoPathUsdAddress);
   const expectedFrom = topicAddress(fromWallet);
   const expectedTo = topicAddress(toWallet);
-  const expectedAmount = BigInt(Math.round(Number(amount) * 1_000_000));
+  const decimalsFactor = 10 ** env.tempoPathUsdDecimals;
+  const expectedAmount = BigInt(Math.round(Number(amount) * decimalsFactor));
 
   const transfer = receipt.logs.find((log) => {
     if (normalizeAddress(log.address) !== normalizedToken) {

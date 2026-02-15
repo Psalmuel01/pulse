@@ -1,10 +1,10 @@
 import { network } from "hardhat";
 
 async function main() {
-  const stablecoinAddress = process.env.TEMPO_STABLECOIN_ADDRESS;
+  const pathUsdAddress = process.env.TEMPO_PATHUSD_ADDRESS ?? process.env.TEMPO_STABLECOIN_ADDRESS;
 
-  if (!stablecoinAddress) {
-    throw new Error("Missing TEMPO_STABLECOIN_ADDRESS in environment.");
+  if (!pathUsdAddress) {
+    throw new Error("Missing TEMPO_PATHUSD_ADDRESS in environment.");
   }
 
   const { ethers } = await network.connect();
@@ -12,11 +12,11 @@ async function main() {
   const [deployer] = await ethers.getSigners();
   console.log(`Deploying with account: ${deployer.address}`);
 
-  const pulse = await ethers.deployContract("PulseSubscriptions", [stablecoinAddress]);
+  const pulse = await ethers.deployContract("PulseSubscriptions", [pathUsdAddress]);
   await pulse.waitForDeployment();
 
   console.log(`PulseSubscriptions deployed at: ${await pulse.getAddress()}`);
-  console.log(`Stablecoin used: ${stablecoinAddress}`);
+  console.log(`pathUSD TIP-20 token used: ${pathUsdAddress}`);
 }
 
 main().catch((error) => {

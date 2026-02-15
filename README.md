@@ -1,6 +1,6 @@
 # Pulse
 
-Pulse is a Next.js 14 App Router starter for creator subscriptions and pay-per-view content, using Tempo stablecoin payments, Supabase storage, and a PostgreSQL data model.
+Pulse is a Next.js 14 App Router starter for creator subscriptions and pay-per-view content, using Tempo pathUSD (TIP-20) payments, Supabase storage, and a PostgreSQL data model.
 
 ## Stack
 
@@ -8,11 +8,12 @@ Pulse is a Next.js 14 App Router starter for creator subscriptions and pay-per-v
 - API routes for backend logic
 - Prisma + PostgreSQL/Supabase
 - Supabase Storage signed upload/signed delivery URLs
-- Tempo payment verification hooks
-- Solidity smart contract with Hardhat in `contracts/PulseSubscriptions.sol`
+- Tempo payment verification hooks (pathUSD/TIP-20 transfer validation)
+- Solidity smart contract with Hardhat in `contracts/PulseSubscriptions.sol` (Tempo is EVM-compatible)
 
 ## Included Features
 
+- Landing page (`/`) with Privy account creation CTA and authenticated redirect to `/dashboard`
 - Explore creators page (`/explore`)
 - Creator profile page (`/creator/[username]`) with:
   - subscribe flow
@@ -55,7 +56,7 @@ Backend routes map to these Solidity functions:
 Contract files:
 
 - `contracts/PulseSubscriptions.sol`
-- `contracts/mocks/MockUSD.sol` (test token)
+- `contracts/mocks/MockPathUSD.sol` (test TIP-20-like token)
 
 Hardhat project layout:
 
@@ -101,12 +102,13 @@ Required groups:
 
 - Postgres: `DATABASE_URL`
 - Supabase: URL + anon + service role + bucket
-- Tempo: RPC + stablecoin + Pulse subscriptions contract address
+- Tempo: RPC + pathUSD token + Pulse subscriptions contract address
 - Deployer: `DEPLOYER_PRIVATE_KEY` (for Hardhat deployment)
 - Privy placeholders: app ID + verification key
+  - `NEXT_PUBLIC_PRIVY_APP_ID` is required for frontend login/signup
 
 ## Notes
 
 - Current auth helper uses request-header fallback (`x-user-id`, `x-wallet-address`) with a local demo default. Replace with Privy server token verification in `src/lib/auth.ts`.
-- Payment verification for Tempo transfers is implemented in `src/lib/tempo.ts` and used by contract-mapped route handlers.
+- Payment verification for Tempo pathUSD transfers is implemented in `src/lib/tempo.ts` and used by contract-mapped route handlers.
 - Signed URL content access is short-lived and consumed per unlock unless user has an active subscription.

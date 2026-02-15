@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ITIP20} from "./interfaces/ITIP20.sol";
 
 contract PulseSubscriptions {
-    using SafeERC20 for IERC20;
+    using SafeERC20 for ITIP20;
 
     uint256 public constant SUBSCRIPTION_DURATION = 30 days;
 
@@ -14,6 +14,7 @@ contract PulseSubscriptions {
     error InvalidFee();
     error AmountBelowSubscriptionFee();
     error InsufficientCreatorEarnings();
+    error InvalidTip20Token();
 
     struct Creator {
         uint256 subscriptionFee;
@@ -22,9 +23,9 @@ contract PulseSubscriptions {
         bool registered;
     }
 
-    IERC20 public immutable usdToken;
+    ITIP20 public immutable pathUsdToken;
 
-    mapping(address => Creator) private creators;
+    mapping(address creator => Creator) private creators;
     mapping(address => mapping(address => uint256)) private subscriptionExpiry;
 
     event CreatorRegistered(address indexed creator, uint256 initialFee);
@@ -37,12 +38,18 @@ contract PulseSubscriptions {
     );
     event CreatorEarningsWithdrawn(address indexed creator, uint256 amount);
 
-    constructor(address usdTokenAddress) {
-        if (usdTokenAddress == address(0)) {
+    constructor(address pathUsdTokenAddress) {
+        if (pathUsdTokenAddress == address(0)) {
             revert InvalidFee();
         }
 
-        usdToken = IERC20(usdTokenAddress);
+        pathUsdToken = ITIP20(pathUsdTokenAddress);
+
+        // pathUSD is a TIP-20 quote token with metadata exposed by `currency`.
+        // Validate interface compatibility up front so deploys fail fast with wrong token types.
+        if (bytes(pathUsdToken.currency()).length == 0) {
+            revert InvalidTip20Token();
+        }
     }
 
     function registerCreator(uint256 initialFee) external {
@@ -72,7 +79,7 @@ contract PulseSubscriptions {
             revert AmountBelowSubscriptionFee();
         }
 
-        usdToken.safeTransferFrom(msg.sender, address(this), amount);
+        pathUsdToken.safeTransferFrom(msg.sender, address(this), amount);
 
         uint256 currentExpiry = subscriptionExpiry[msg.sender][creator];
         uint256 startTime = currentExpiry > block.timestamp ? currentExpiry : block.timestamp;
@@ -98,7 +105,7 @@ contract PulseSubscriptions {
         }
 
         creatorData.earnings -= amount;
-        usdToken.safeTransfer(msg.sender, amount);
+        pathUsdToken.safeTransfer(msg.sender, amount);
 
         emit CreatorEarningsWithdrawn(msg.sender, amount);
     }

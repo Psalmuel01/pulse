@@ -53,7 +53,7 @@ export default async function ExplorePage() {
         <p className="text-xs uppercase tracking-[0.22em] text-muted">Tempo Creator Economy</p>
         <h1 className="font-serif text-4xl leading-tight">Explore creators across music, video, and writing.</h1>
         <p className="text-sm text-ink/75">
-          Subscribe monthly for full access, or unlock single premium drops with stablecoin.
+          Subscribe monthly for full access, or unlock single premium drops with pathUSD.
         </p>
       </header>
 
