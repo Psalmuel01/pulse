@@ -50,7 +50,9 @@ model User {
 model Creator {
   id              String         @id @default(cuid())
   userId          String         @unique
+  name            String         @default("")
   username        String         @unique
+  description     String         @default("")
   category        String
   walletAddress   String
   subscriptionFee Decimal        @db.Decimal(18, 6)

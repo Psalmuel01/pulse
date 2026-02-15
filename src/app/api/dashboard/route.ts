@@ -154,8 +154,11 @@ export async function GET(request: Request) {
   return NextResponse.json({
     creator: {
       id: creator.id,
+      name: creator.name,
       username: creator.username,
+      description: creator.description,
       category: creator.category,
+      walletAddress: creator.walletAddress,
       subscriptionFee: creator.subscriptionFee.toString(),
       lifetimeEarnings: creator.lifetimeEarnings.toString(),
       availableEarnings: creator.availableEarnings.toString()

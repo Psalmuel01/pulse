@@ -12,7 +12,9 @@ export async function GET(_: Request, { params }: { params: { username: string }
     return NextResponse.json({
       creator: {
         id: creator.id,
+        name: creator.name,
         username: creator.username,
+        description: creator.description,
         category: creator.category,
         walletAddress: "0xDEMO000000000000000000000000000000000111",
         subscriptionFee: creator.subscriptionFee,
@@ -52,7 +54,9 @@ export async function GET(_: Request, { params }: { params: { username: string }
   return NextResponse.json({
     creator: {
       id: creator.id,
+      name: creator.name,
       username: creator.username,
+      description: creator.description,
       category: creator.category,
       walletAddress: creator.walletAddress,
       subscriptionFee: creator.subscriptionFee.toString(),

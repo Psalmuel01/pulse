@@ -2,6 +2,8 @@ import { env } from "@/lib/env";
 
 const TRANSFER_TOPIC =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+const TRANSFER_WITH_MEMO_TOPIC =
+  "0x57bc7354aa85aed339e000bccffabbc529466af35f0772c8f8ee1145927de7f0";
 
 type JsonRpcResponse<T> = {
   jsonrpc: "2.0";
@@ -12,11 +14,19 @@ type JsonRpcResponse<T> = {
 
 type TxReceipt = {
   status: string;
+  from?: string;
+  to?: string | null;
   logs: Array<{
     address: string;
     topics: string[];
     data: string;
   }>;
+};
+
+type TxByHash = {
+  from: string;
+  to: string | null;
+  input: string;
 };
 
 function normalizeAddress(address: string) {
@@ -63,6 +73,23 @@ function hexToBigInt(hex: string) {
   }
 }
 
+function parseUnitsFromDecimal(value: string, decimals: number) {
+  const normalized = value.trim();
+  if (!normalized) {
+    return BigInt(0);
+  }
+
+  const negative = normalized.startsWith("-");
+  if (negative) {
+    return BigInt(0);
+  }
+
+  const [wholeRaw, fractionRaw = ""] = normalized.split(".");
+  const whole = wholeRaw.replace(/\D/g, "") || "0";
+  const fraction = fractionRaw.replace(/\D/g, "").slice(0, decimals).padEnd(decimals, "0");
+  return BigInt(`${whole}${fraction}`);
+}
+
 type VerifyPathUsdTransferParams = {
   txHash: string;
   fromWallet: string;
@@ -97,15 +124,15 @@ export async function verifyTempoPathUsdTransfer({
   const normalizedToken = normalizeAddress(env.tempoPathUsdAddress);
   const expectedFrom = topicAddress(fromWallet);
   const expectedTo = topicAddress(toWallet);
-  const decimalsFactor = 10 ** env.tempoPathUsdDecimals;
-  const expectedAmount = BigInt(Math.round(Number(amount) * decimalsFactor));
+  const expectedAmount = parseUnitsFromDecimal(amount, env.tempoPathUsdDecimals);
 
   const transfer = receipt.logs.find((log) => {
     if (normalizeAddress(log.address) !== normalizedToken) {
       return false;
     }
 
-    if (log.topics[0]?.toLowerCase() !== TRANSFER_TOPIC) {
+    const eventTopic = log.topics[0]?.toLowerCase();
+    if (eventTopic !== TRANSFER_TOPIC && eventTopic !== TRANSFER_WITH_MEMO_TOPIC) {
       return false;
     }
 
@@ -120,4 +147,53 @@ export async function verifyTempoPathUsdTransfer({
   }
 
   return hexToBigInt(transfer.data) >= expectedAmount;
+}
+
+type VerifyContractCallParams = {
+  txHash: string;
+  fromWallet: string;
+  contractAddress: string;
+  methodSelector?: string;
+};
+
+export async function verifyTempoContractCall({
+  txHash,
+  fromWallet,
+  contractAddress,
+  methodSelector
+}: VerifyContractCallParams): Promise<boolean> {
+  if (!txHash) {
+    return false;
+  }
+
+  if (!fromWallet || !contractAddress) {
+    return false;
+  }
+
+  if (process.env.NODE_ENV !== "production" && txHash.startsWith("demo_")) {
+    return true;
+  }
+
+  const [receipt, transaction] = await Promise.all([
+    rpcCall<TxReceipt>("eth_getTransactionReceipt", [txHash]),
+    rpcCall<TxByHash>("eth_getTransactionByHash", [txHash])
+  ]);
+
+  if (!receipt || receipt.status !== "0x1" || !transaction) {
+    return false;
+  }
+
+  if (normalizeAddress(transaction.from) !== normalizeAddress(fromWallet)) {
+    return false;
+  }
+
+  if (!transaction.to || normalizeAddress(transaction.to) !== normalizeAddress(contractAddress)) {
+    return false;
+  }
+
+  if (!methodSelector) {
+    return true;
+  }
+
+  return transaction.input.toLowerCase().startsWith(methodSelector.toLowerCase());
 }

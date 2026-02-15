@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { usePrivy } from "@privy-io/react-auth";
 
 const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
@@ -25,7 +27,16 @@ function PrivyMissingConfig({ title, description }: Omit<PrivyAuthGateProps, "ch
 }
 
 function PrivyConfiguredGate({ children, title, description }: PrivyAuthGateProps) {
+  const router = useRouter();
   const { ready, authenticated, login } = usePrivy();
+  const [pendingLoginRedirect, setPendingLoginRedirect] = useState(false);
+
+  useEffect(() => {
+    if (pendingLoginRedirect && ready && authenticated) {
+      router.replace("/explore");
+      setPendingLoginRedirect(false);
+    }
+  }, [authenticated, pendingLoginRedirect, ready, router]);
 
   if (!ready) {
     return (
@@ -44,7 +55,14 @@ function PrivyConfiguredGate({ children, title, description }: PrivyAuthGateProp
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => login()}
+            onClick={async () => {
+              setPendingLoginRedirect(true);
+              try {
+                await login();
+              } catch {
+                setPendingLoginRedirect(false);
+              }
+            }}
             className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
           >
             Create Account

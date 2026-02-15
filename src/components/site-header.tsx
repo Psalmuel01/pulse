@@ -6,8 +6,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 const links: Array<{ href: Route; label: string }> = [
   { href: "/explore", label: "Explore" },
   { href: "/feed", label: "Feed" },
-  { href: "/dashboard", label: "Creator Dashboard" },
-  { href: "/become-creator", label: "Become a Creator" }
+  { href: "/creator", label: "Creator" }
 ];
 
 export function SiteHeader() {

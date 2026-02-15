@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { CreatorProfileClient } from "@/components/creator-profile-client";
 import { PrivyAuthGate } from "@/components/privy-auth-gate";
-import { getCurrentUserFromServerContext } from "@/lib/auth";
 import { db, isDatabaseConfigured } from "@/lib/db";
 import { getDemoCreatorByUsername } from "@/lib/demo-data";
 
@@ -22,10 +21,15 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
         <CreatorProfileClient
           creator={{
             id: creator.id,
+            name: creator.name,
             username: creator.username,
+            description: creator.description,
             category: creator.category,
+            walletAddress: "0xDEMO000000000000000000000000000000000111",
             subscriptionFee: creator.subscriptionFee,
-            subscriberCount: creator.subscriberCount
+            subscriberCount: creator.subscriberCount,
+            totalContent: creator.contents.length,
+            memberSince: new Date().toISOString()
           }}
           contents={creator.contents.map((content) => ({
             id: content.id,
@@ -41,8 +45,6 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     );
   }
 
-  const user = await getCurrentUserFromServerContext();
-
   const creator = await db.creator.findUnique({
     where: { username },
     include: {
@@ -55,9 +57,7 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
           expiresAt: { gt: new Date() }
         },
         select: {
-          id: true,
-          userId: true,
-          expiresAt: true
+          id: true
         }
       }
     }
@@ -67,21 +67,6 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     notFound();
   }
 
-  const userUnlocks = await db.unlock.findMany({
-    where: {
-      userId: user.id,
-      content: {
-        creatorId: creator.id
-      },
-      viewsRemaining: { gt: 0 }
-    },
-    select: {
-      contentId: true
-    }
-  });
-
-  const isSubscribed = creator.subscriptions.some((subscription) => subscription.userId === user.id);
-
   return (
     <PrivyAuthGate
       title="Creator Profile"
@@ -90,10 +75,15 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
       <CreatorProfileClient
         creator={{
           id: creator.id,
+          name: creator.name,
           username: creator.username,
+          description: creator.description,
           category: creator.category,
+          walletAddress: creator.walletAddress,
           subscriptionFee: creator.subscriptionFee.toString(),
-          subscriberCount: creator.subscriptions.length
+          subscriberCount: creator.subscriptions.length,
+          totalContent: creator.contents.length,
+          memberSince: creator.createdAt.toISOString()
         }}
         contents={creator.contents.map((content) => ({
           id: content.id,
@@ -102,8 +92,8 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
           price: content.price.toString(),
           onlyForSubscribers: content.onlyForSubscribers
         }))}
-        initialSubscribed={isSubscribed}
-        initialUnlockedIds={userUnlocks.map((unlock) => unlock.contentId)}
+        initialSubscribed={false}
+        initialUnlockedIds={[]}
       />
     </PrivyAuthGate>
   );

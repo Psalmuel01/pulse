@@ -1,11 +1,20 @@
-import { verifyTempoPathUsdTransfer } from "@/lib/tempo";
+import { verifyTempoContractCall, verifyTempoPathUsdTransfer } from "@/lib/tempo";
 import { env } from "@/lib/env";
+import {
+  createPublicClient,
+  http,
+  isAddress,
+  parseAbi,
+  type Address
+} from "viem";
+import { tempo } from "@/lib/tempo-chain";
 
 type SubscribeContractParams = {
   txHash: string;
   subscriberWallet: string;
   creatorWallet: string;
   amountUsd: string;
+  receiverWallet?: string;
 };
 
 type RegisterCreatorParams = {
@@ -31,32 +40,57 @@ export async function registerCreatorContractCall({
   creatorWallet,
   initialFeeUsd
 }: RegisterCreatorParams) {
-  if (process.env.NODE_ENV === "production" && !txHash) {
-    return false;
-  }
-
   if (!creatorWallet || Number(initialFeeUsd) <= 0) {
     return false;
   }
 
-  return true;
+  if (!txHash && process.env.NODE_ENV !== "production") {
+    return true;
+  }
+
+  if (!txHash || !env.pulseSubscriptionsContractAddress) {
+    return false;
+  }
+
+  return verifyTempoContractCall({
+    txHash,
+    fromWallet: creatorWallet,
+    contractAddress: env.pulseSubscriptionsContractAddress,
+    methodSelector: "0xbdca7d77" // registerCreator(uint256)
+  });
 }
 
 export async function subscribeContractCall({
   txHash,
   subscriberWallet,
   creatorWallet,
-  amountUsd
+  amountUsd,
+  receiverWallet
 }: SubscribeContractParams) {
-  // Contract flow collects pathUSD in the contract and tracks creator earnings internally.
-  const receiver = env.pulseSubscriptionsContractAddress ?? creatorWallet;
-
-  return verifyTempoPathUsdTransfer({
+  const receiver = receiverWallet ?? env.pulseSubscriptionsContractAddress ?? creatorWallet;
+  const transferOk = await verifyTempoPathUsdTransfer({
     txHash,
     fromWallet: subscriberWallet,
     toWallet: receiver,
     amount: amountUsd
   });
+
+  if (!transferOk) {
+    return false;
+  }
+
+  if (!receiverWallet && env.pulseSubscriptionsContractAddress) {
+    const contractCallOk = await verifyTempoContractCall({
+      txHash,
+      fromWallet: subscriberWallet,
+      contractAddress: env.pulseSubscriptionsContractAddress,
+      methodSelector: "0x8de69284" // subscribe(address,uint256)
+    });
+
+    return contractCallOk;
+  }
+
+  return true;
 }
 
 export async function withdrawCreatorEarningContractCall({
@@ -64,10 +98,6 @@ export async function withdrawCreatorEarningContractCall({
   creatorWallet,
   amountUsd
 }: WithdrawCreatorEarningParams) {
-  if (process.env.NODE_ENV === "production" && !txHash) {
-    return false;
-  }
-
   if (!creatorWallet || Number(amountUsd) <= 0) {
     return false;
   }
@@ -76,7 +106,16 @@ export async function withdrawCreatorEarningContractCall({
     return true;
   }
 
-  return Boolean(txHash);
+  if (!txHash || !env.pulseSubscriptionsContractAddress) {
+    return false;
+  }
+
+  return verifyTempoContractCall({
+    txHash,
+    fromWallet: creatorWallet,
+    contractAddress: env.pulseSubscriptionsContractAddress,
+    methodSelector: "0x84a7e788" // withdrawCreatorEarning(uint256)
+  });
 }
 
 export async function updateSubscriptionFeeContractCall({
@@ -84,23 +123,57 @@ export async function updateSubscriptionFeeContractCall({
   creatorWallet,
   newFeeUsd
 }: UpdateSubscriptionFeeParams) {
-  if (process.env.NODE_ENV === "production" && !txHash) {
-    return false;
-  }
-
   if (!creatorWallet || Number(newFeeUsd) <= 0) {
     return false;
   }
 
-  return true;
+  if (!txHash && process.env.NODE_ENV !== "production") {
+    return true;
+  }
+
+  if (!txHash || !env.pulseSubscriptionsContractAddress) {
+    return false;
+  }
+
+  return verifyTempoContractCall({
+    txHash,
+    fromWallet: creatorWallet,
+    contractAddress: env.pulseSubscriptionsContractAddress,
+    methodSelector: "0xb97ff114" // updateSubscriptionFee(uint256)
+  });
 }
 
 export async function isActiveSubscriberContractRead(params: {
   subscriberWallet: string;
   creatorWallet: string;
 }) {
-  void params;
-  // Hook to chain read-only function `isActiveSubscriber`.
-  // Return `null` if no direct chain read is configured.
-  return null;
+  const { subscriberWallet, creatorWallet } = params;
+  const contractAddress = env.pulseSubscriptionsContractAddress;
+  if (!contractAddress) {
+    return null;
+  }
+
+  if (!isAddress(contractAddress) || !isAddress(subscriberWallet) || !isAddress(creatorWallet)) {
+    return null;
+  }
+
+  try {
+    const publicClient = createPublicClient({
+      chain: tempo,
+      transport: http(env.tempoRpcUrl ?? tempo.rpcUrls.default.http[0])
+    });
+
+    const isActive = await publicClient.readContract({
+      address: contractAddress as Address,
+      abi: parseAbi([
+        "function isActiveSubscriber(address subscriber, address creator) view returns (bool)"
+      ]),
+      functionName: "isActiveSubscriber",
+      args: [subscriberWallet as Address, creatorWallet as Address]
+    });
+
+    return Boolean(isActive);
+  } catch {
+    return null;
+  }
 }

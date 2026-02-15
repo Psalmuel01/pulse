@@ -8,7 +8,9 @@ export type DemoContent = {
 
 export type DemoCreator = {
   id: string;
+  name: string;
   username: string;
+  description: string;
   category: string;
   subscriptionFee: string;
   subscriberCount: number;
@@ -18,7 +20,9 @@ export type DemoCreator = {
 export const demoCreators: DemoCreator[] = [
   {
     id: "demo-creator-1",
+    name: "Pulse Demo",
     username: "demo",
+    description: "Daily exclusive tracks and breakdowns from my studio sessions.",
     category: "music",
     subscriptionFee: "9.99",
     subscriberCount: 214,
@@ -41,8 +45,10 @@ export const demoCreators: DemoCreator[] = [
   },
   {
     id: "demo-creator-2",
+    name: "Ink Signal",
     username: "inksignal",
-    category: "articles",
+    description: "Concise writing playbooks for creators building recurring revenue.",
+    category: "writing",
     subscriptionFee: "6.50",
     subscriberCount: 89,
     contents: [
@@ -57,8 +63,10 @@ export const demoCreators: DemoCreator[] = [
   },
   {
     id: "demo-creator-3",
+    name: "Frame Grid",
     username: "framegrid",
-    category: "video",
+    description: "Production tutorials and practical camera workflows for solo teams.",
+    category: "filmmaking",
     subscriptionFee: "12.00",
     subscriberCount: 341,
     contents: [

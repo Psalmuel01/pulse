@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuthedFetch } from "@/hooks/use-authed-fetch";
 import { toUsd } from "@/lib/utils";
 
 type Tab = "all" | "subscriptions" | "history";
@@ -45,6 +46,7 @@ type FeedRowsByTab = {
 };
 
 export function FeedView() {
+  const authedFetch = useAuthedFetch();
   const [tab, setTab] = useState<Tab>("all");
   const [rows, setRows] = useState<FeedRowsByTab[Tab]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,7 +57,7 @@ export function FeedView() {
     setLoading(true);
     setError(null);
 
-    fetch(`/api/feed?tab=${tab}`)
+    authedFetch(`/api/feed?tab=${tab}`)
       .then(async (response) => {
         const payload = await response.json();
         if (!response.ok) {
@@ -81,7 +83,7 @@ export function FeedView() {
     return () => {
       active = false;
     };
-  }, [tab]);
+  }, [authedFetch, tab]);
 
   return (
     <section className="space-y-5">

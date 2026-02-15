@@ -2,6 +2,7 @@
 
 import { PrivyProvider } from "@privy-io/react-auth";
 import { ThemeProvider } from "next-themes";
+import { tempo } from "@/lib/tempo-chain";
 
 const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
@@ -20,7 +21,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <PrivyProvider
       appId={privyAppId}
       config={{
-        loginMethods: ["email", "sms"],
+        loginMethods: ["email", "sms", "wallet"],
+        defaultChain: tempo,
+        supportedChains: [tempo],
         appearance: {
           theme: "light",
           accentColor: "#0f766e",
@@ -31,7 +34,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         },
         embeddedWallets: {
           ethereum: {
-            createOnLogin: "users-without-wallets"
+            createOnLogin: "all-users"
           }
         }
       }}

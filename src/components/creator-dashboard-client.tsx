@@ -1,14 +1,20 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { DashboardCharts } from "@/components/dashboard-charts";
+import { useAuthedFetch } from "@/hooks/use-authed-fetch";
+import { useTempoBalances } from "@/hooks/use-tempo-balances";
+import { useTempoPayments } from "@/hooks/use-tempo-payments";
 import { toUsd } from "@/lib/utils";
 
 type DashboardPayload = {
   creator: {
     id: string;
+    name: string;
     username: string;
+    description: string;
     category: string;
+    walletAddress: string;
     subscriptionFee: string;
     lifetimeEarnings: string;
     availableEarnings: string;
@@ -40,7 +46,34 @@ type DashboardPayload = {
 
 type Tab = "analytics" | "contents" | "subscribers";
 
+type ContentType = "ARTICLE" | "VIDEO" | "MUSIC";
+
+function detectContentTypeFromMime(mimeType: string): ContentType | null {
+  const normalized = mimeType.toLowerCase();
+  if (normalized === "application/pdf") {
+    return null;
+  }
+  if (normalized.startsWith("video/")) {
+    return "VIDEO";
+  }
+  if (normalized.startsWith("audio/")) {
+    return "MUSIC";
+  }
+  if (normalized.startsWith("text/")) {
+    return "ARTICLE";
+  }
+  return null;
+}
+
 export function CreatorDashboardClient() {
+  const authedFetch = useAuthedFetch();
+  const {
+    updateSubscriptionFee,
+    withdrawCreatorEarning,
+    isSubmitting: chainTxSubmitting,
+    error: chainTxError
+  } = useTempoPayments();
+
   const [tab, setTab] = useState<Tab>("analytics");
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,17 +85,19 @@ export function CreatorDashboardClient() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [type, setType] = useState<"ARTICLE" | "VIDEO" | "MUSIC">("ARTICLE");
+  const [detectedType, setDetectedType] = useState<ContentType>("ARTICLE");
   const [price, setPrice] = useState("0");
   const [onlyForSubscribers, setOnlyForSubscribers] = useState(false);
   const [storagePath, setStoragePath] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [articleBody, setArticleBody] = useState("");
+  const balances = useTempoBalances(data?.creator.walletAddress);
 
-  async function loadDashboard() {
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    const response = await fetch("/api/dashboard");
+    const response = await authedFetch("/api/dashboard");
     const payload = await response.json();
 
     if (!response.ok) {
@@ -75,14 +110,14 @@ export function CreatorDashboardClient() {
     setData(payload as DashboardPayload);
     setNewFee(payload.creator.subscriptionFee);
     setLoading(false);
-  }
+  }, [authedFetch]);
 
   useEffect(() => {
     loadDashboard().catch((err: unknown) => {
       setError(err instanceof Error ? err.message : "Could not load creator dashboard.");
       setLoading(false);
     });
-  }, []);
+  }, [loadDashboard]);
 
   const tabs = useMemo(
     () => [
@@ -101,26 +136,31 @@ export function CreatorDashboardClient() {
 
     setStatus(null);
 
-    const response = await fetch(`/api/creators/${data.creator.id}/subscription-fee`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        subscriptionFee: Number(newFee),
-        txHash: `demo_fee_${Date.now()}`
-      })
-    });
+    try {
+      const txHash = await updateSubscriptionFee(newFee);
+      const response = await authedFetch(`/api/creators/${data.creator.id}/subscription-fee`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          subscriptionFee: Number(newFee),
+          txHash
+        })
+      });
 
-    const payload = await response.json();
+      const payload = await response.json();
 
-    if (!response.ok) {
-      setStatus(payload.error ?? "Could not update fee.");
-      return;
+      if (!response.ok) {
+        setStatus(payload.error ?? "Could not update fee.");
+        return;
+      }
+
+      setStatus("Subscription fee updated.");
+      await loadDashboard();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not update fee.");
     }
-
-    setStatus("Subscription fee updated.");
-    await loadDashboard();
   }
 
   async function handleWithdraw(event: FormEvent<HTMLFormElement>) {
@@ -131,27 +171,38 @@ export function CreatorDashboardClient() {
 
     setStatus(null);
 
-    const response = await fetch(`/api/creators/${data.creator.id}/withdraw`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        amount: withdrawAmount ? Number(withdrawAmount) : undefined,
-        txHash: `demo_withdraw_${Date.now()}`
-      })
-    });
-
-    const payload = await response.json();
-
-    if (!response.ok) {
-      setStatus(payload.error ?? "Could not withdraw earnings.");
+    const amount = withdrawAmount ? Number(withdrawAmount) : Number(data.creator.availableEarnings);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setStatus("No available earnings to withdraw.");
       return;
     }
 
-    setStatus(`Withdrew ${toUsd(payload.withdrawnAmount)}.`);
-    setWithdrawAmount("");
-    await loadDashboard();
+    try {
+      const txHash = await withdrawCreatorEarning(String(amount));
+      const response = await authedFetch(`/api/creators/${data.creator.id}/withdraw`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          amount: withdrawAmount ? Number(withdrawAmount) : undefined,
+          txHash
+        })
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setStatus(payload.error ?? "Could not withdraw earnings.");
+        return;
+      }
+
+      setStatus(`Withdrew ${toUsd(payload.withdrawnAmount)}.`);
+      setWithdrawAmount("");
+      await loadDashboard();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not withdraw earnings.");
+    }
   }
 
   async function handleAssetUpload() {
@@ -160,9 +211,14 @@ export function CreatorDashboardClient() {
       return;
     }
 
+    if (detectedType === "ARTICLE") {
+      setStatus("Article content is text-based. No file upload is needed.");
+      return;
+    }
+
     setStatus(null);
 
-    const urlResponse = await fetch("/api/contents/upload-url", {
+    const urlResponse = await authedFetch("/api/contents/upload-url", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -194,7 +250,7 @@ export function CreatorDashboardClient() {
     }
 
     setStoragePath(urlPayload.storagePath);
-    setStatus("File uploaded. Publish content metadata below.");
+    setStatus(`File uploaded. Detected content type: ${detectedType.toLowerCase()}.`);
   }
 
   async function handleCreateContent(event: FormEvent<HTMLFormElement>) {
@@ -202,7 +258,17 @@ export function CreatorDashboardClient() {
 
     setStatus(null);
 
-    const response = await fetch("/api/contents", {
+    if (detectedType !== "ARTICLE" && !storagePath) {
+      setStatus("Upload your file first before publishing.");
+      return;
+    }
+
+    if (detectedType === "ARTICLE" && !articleBody.trim() && !storagePath) {
+      setStatus("Enter article text before publishing.");
+      return;
+    }
+
+    const response = await authedFetch("/api/contents", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -210,10 +276,11 @@ export function CreatorDashboardClient() {
       body: JSON.stringify({
         title,
         description,
-        type,
+        type: detectedType,
         price: Number(price),
         onlyForSubscribers,
-        storagePath
+        storagePath: storagePath || undefined,
+        articleBody: detectedType === "ARTICLE" ? articleBody : undefined
       })
     });
 
@@ -231,7 +298,41 @@ export function CreatorDashboardClient() {
     setOnlyForSubscribers(false);
     setStoragePath("");
     setSelectedFile(null);
+    setArticleBody("");
+    setDetectedType("ARTICLE");
     await loadDashboard();
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    setSelectedFile(file);
+    setStoragePath("");
+
+    if (!file) {
+      setDetectedType("ARTICLE");
+      return;
+    }
+
+    const nextType = detectContentTypeFromMime(file.type);
+    if (!nextType) {
+      setStatus("Unsupported file type. Upload video/audio/text files only. PDFs are disabled.");
+      setSelectedFile(null);
+      event.target.value = "";
+      return;
+    }
+
+    setDetectedType(nextType);
+    setStatus(`Detected ${nextType.toLowerCase()} file.`);
+
+    if (nextType === "ARTICLE") {
+      const text = await file.text().catch(() => "");
+      if (!text.trim()) {
+        setStatus("Text file is empty. Add article text before publishing.");
+      } else {
+        setArticleBody(text);
+        setStatus("Text file loaded into article content.");
+      }
+    }
   }
 
   if (loading) {
@@ -249,8 +350,28 @@ export function CreatorDashboardClient() {
   return (
     <section className="space-y-6">
       <header className="rounded-2xl border border-border bg-card p-6">
-        <p className="text-xs uppercase tracking-[0.2em] text-muted">Creator Dashboard</p>
-        <h1 className="mt-1 font-serif text-4xl">@{data.creator.username}</h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-muted">Creator Dashboard</p>
+            <h1 className="mt-1 font-serif text-4xl">{data.creator.name}</h1>
+            <p className="text-sm text-muted">@{data.creator.username}</p>
+            <p className="mt-2 max-w-2xl text-sm text-ink/80">{data.creator.description}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTab("contents")}
+            className="rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            Add Content
+          </button>
+        </div>
+        <p className="mt-1 break-all font-mono text-xs text-muted">
+          Wallet: <span className="font-medium text-ink/80">{data.creator.walletAddress}</span>
+        </p>
+        <p className="mt-1 text-xs text-muted">
+          Gas ({balances.gas.symbol}): {balances.loading ? "Loading..." : balances.gas.value} | Payment (
+          {balances.payment.symbol}): {balances.loading ? "Loading..." : balances.payment.value}
+        </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-border p-4">
             <p className="text-xs uppercase tracking-wide text-muted">Revenue (lifetime)</p>
@@ -283,6 +404,9 @@ export function CreatorDashboardClient() {
       </div>
 
       {status && <p className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-ink/80">{status}</p>}
+      {!status && chainTxError && (
+        <p className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-ink/80">{chainTxError}</p>
+      )}
 
       {tab === "analytics" && (
         <div className="space-y-5">
@@ -304,6 +428,7 @@ export function CreatorDashboardClient() {
               </label>
               <button
                 type="submit"
+                disabled={chainTxSubmitting}
                 className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 Update Fee
@@ -325,6 +450,7 @@ export function CreatorDashboardClient() {
               </label>
               <button
                 type="submit"
+                disabled={chainTxSubmitting}
                 className="mt-4 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 Withdraw
@@ -384,7 +510,8 @@ export function CreatorDashboardClient() {
               <span className="mb-1 block text-ink/80">Media file</span>
               <input
                 type="file"
-                onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+                accept="video/*,audio/*,text/*"
+                onChange={handleFileChange}
                 className="w-full rounded-xl border border-border bg-canvas px-3 py-2"
               />
             </label>
@@ -392,21 +519,16 @@ export function CreatorDashboardClient() {
             <button
               type="button"
               onClick={handleAssetUpload}
+              disabled={!selectedFile || detectedType === "ARTICLE"}
               className="rounded-xl border border-border px-4 py-2 text-sm font-semibold"
             >
-              Upload File to Supabase
+              Upload File to Supabase (Video/Music)
             </button>
 
-            <label className="block text-sm">
-              <span className="mb-1 block text-ink/80">Storage path</span>
-              <input
-                required
-                value={storagePath}
-                onChange={(event) => setStoragePath(event.target.value)}
-                className="w-full rounded-xl border border-border bg-canvas px-4 py-2"
-                placeholder="creator-id/file.ext"
-              />
-            </label>
+            <div className="rounded-xl border border-dashed border-border bg-canvas/70 px-4 py-3 text-xs text-ink/80">
+              <p>Detected type: {detectedType.toLowerCase()}</p>
+              {storagePath ? <p className="mt-1 break-all">Storage path: {storagePath}</p> : null}
+            </div>
 
             <label className="block text-sm">
               <span className="mb-1 block text-ink/80">Title</span>
@@ -428,20 +550,18 @@ export function CreatorDashboardClient() {
               />
             </label>
 
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block text-sm">
-                <span className="mb-1 block text-ink/80">Type</span>
-                <select
-                  value={type}
-                  onChange={(event) => setType(event.target.value as "ARTICLE" | "VIDEO" | "MUSIC")}
-                  className="w-full rounded-xl border border-border bg-canvas px-4 py-2"
-                >
-                  <option value="ARTICLE">Article</option>
-                  <option value="VIDEO">Video</option>
-                  <option value="MUSIC">Music</option>
-                </select>
-              </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-ink/80">Article Text (required for article posts)</span>
+              <textarea
+                value={articleBody}
+                onChange={(event) => setArticleBody(event.target.value)}
+                rows={6}
+                className="w-full rounded-xl border border-border bg-canvas px-4 py-2"
+                placeholder="Write or paste your article text here."
+              />
+            </label>
 
+            <div className="grid grid-cols-2 gap-3">
               <label className="block text-sm">
                 <span className="mb-1 block text-ink/80">Price (USD)</span>
                 <input

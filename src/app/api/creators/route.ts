@@ -11,7 +11,9 @@ export async function GET() {
     return NextResponse.json({
       creators: demoCreators.map((creator) => ({
         id: creator.id,
+        name: creator.name,
         username: creator.username,
+        description: creator.description,
         category: creator.category,
         walletAddress: "0xDEMO000000000000000000000000000000000111",
         subscriptionFee: creator.subscriptionFee,
@@ -44,7 +46,9 @@ export async function GET() {
   return NextResponse.json({
     creators: creators.map((creator) => ({
       id: creator.id,
+      name: creator.name,
       username: creator.username,
+      description: creator.description,
       category: creator.category,
       walletAddress: creator.walletAddress,
       subscriptionFee: creator.subscriptionFee.toString(),
@@ -91,7 +95,9 @@ export async function POST(request: Request) {
     const creator = await db.creator.create({
       data: {
         userId: user.id,
+        name: parsed.data.name,
         username: parsed.data.username,
+        description: parsed.data.description,
         category: parsed.data.category,
         walletAddress: user.walletAddress ?? "",
         subscriptionFee: new Prisma.Decimal(parsed.data.subscriptionFee),
@@ -104,7 +110,9 @@ export async function POST(request: Request) {
       {
         creator: {
           id: creator.id,
+          name: creator.name,
           username: creator.username,
+          description: creator.description,
           category: creator.category,
           subscriptionFee: creator.subscriptionFee.toString(),
           lifetimeEarnings: creator.lifetimeEarnings.toString(),

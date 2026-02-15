@@ -68,7 +68,8 @@ export async function POST(request: Request) {
     txHash: parsed.data.txHash,
     subscriberWallet: user.walletAddress,
     creatorWallet: content.creator.walletAddress,
-    amountUsd: content.price.toString()
+    amountUsd: content.price.toString(),
+    receiverWallet: content.creator.walletAddress
   });
 
   if (!verified) {

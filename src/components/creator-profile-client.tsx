@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ContentCard } from "@/components/content-card";
+import { useAuthedFetch } from "@/hooks/use-authed-fetch";
+import { useTempoPayments } from "@/hooks/use-tempo-payments";
 import { toUsd } from "@/lib/utils";
 
 type ContentItem = {
@@ -15,10 +17,15 @@ type ContentItem = {
 type CreatorProfileClientProps = {
   creator: {
     id: string;
+    name: string;
     username: string;
+    description: string;
     category: string;
+    walletAddress: string;
     subscriptionFee: string;
     subscriberCount: number;
+    totalContent: number;
+    memberSince: string;
   };
   contents: ContentItem[];
   initialSubscribed: boolean;
@@ -31,10 +38,17 @@ export function CreatorProfileClient({
   initialSubscribed,
   initialUnlockedIds
 }: CreatorProfileClientProps) {
+  const authedFetch = useAuthedFetch();
+  const { subscribe, unlockContent, isSubmitting } = useTempoPayments();
   const [isSubscribed, setIsSubscribed] = useState(initialSubscribed);
   const [unlockedIds, setUnlockedIds] = useState(new Set(initialUnlockedIds));
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [pendingUnlockTxByContent, setPendingUnlockTxByContent] = useState<Record<string, string>>({});
+  const contentById = useMemo(
+    () => new Map(contents.map((content) => [content.id, content])),
+    [contents]
+  );
 
   const renderedUnlocked = useMemo(() => {
     if (isSubscribed) {
@@ -43,65 +57,126 @@ export function CreatorProfileClient({
     return unlockedIds;
   }, [contents, isSubscribed, unlockedIds]);
 
+  useEffect(() => {
+    let active = true;
+
+    authedFetch(`/api/subscriptions/check?creatorId=${encodeURIComponent(creator.id)}`)
+      .then(async (response) => {
+        if (!response.ok) {
+          return;
+        }
+        const payload = (await response.json()) as { isActiveSubscriber?: boolean };
+        if (active && typeof payload.isActiveSubscriber === "boolean") {
+          setIsSubscribed(payload.isActiveSubscriber);
+        }
+      })
+      .catch(() => {
+        // Keep optimistic UI fallback.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [authedFetch, creator.id]);
+
   async function handleSubscribe() {
     setBusyKey("subscribe");
     setStatusMessage(null);
 
-    const txHash = `demo_sub_${Date.now()}`;
+    try {
+      const txHash = await subscribe(creator.walletAddress, creator.subscriptionFee);
+      const response = await authedFetch("/api/subscriptions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ creatorId: creator.id, txHash })
+      });
 
-    const response = await fetch("/api/subscriptions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ creatorId: creator.id, txHash })
-    });
+      const payload = await response.json();
 
-    const payload = await response.json();
+      if (!response.ok) {
+        setStatusMessage(payload.error ?? "Subscription failed.");
+        setBusyKey(null);
+        return;
+      }
 
-    if (!response.ok) {
-      setStatusMessage(payload.error ?? "Subscription failed.");
+      setIsSubscribed(true);
+      setStatusMessage(`Subscribed through ${payload.subscription.expiresAt}.`);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Subscription failed.");
+    } finally {
       setBusyKey(null);
-      return;
     }
-
-    setIsSubscribed(true);
-    setStatusMessage(`Subscribed through ${payload.subscription.expiresAt}.`);
-    setBusyKey(null);
   }
 
   async function handleUnlock(contentId: string) {
     setBusyKey(contentId);
     setStatusMessage(null);
 
-    const txHash = `demo_unlock_${Date.now()}`;
-
-    const response = await fetch("/api/unlocks", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ contentId, txHash })
-    });
-
-    const payload = await response.json();
-
-    if (!response.ok) {
-      setStatusMessage(payload.error ?? "Unlock failed.");
+    const content = contentById.get(contentId);
+    if (!content) {
+      setStatusMessage("Content not found.");
       setBusyKey(null);
       return;
     }
 
-    setUnlockedIds((current) => new Set([...current, contentId]));
-    setStatusMessage("Content unlocked. Click View Content to open it.");
-    setBusyKey(null);
+    try {
+      const pendingTxHash = pendingUnlockTxByContent[contentId];
+      const txHash =
+        pendingTxHash ??
+        (await unlockContent(
+          creator.walletAddress,
+          content.price,
+          `unlock:${content.id}`
+        ));
+
+      if (!pendingTxHash) {
+        setPendingUnlockTxByContent((current) => ({ ...current, [contentId]: txHash }));
+      }
+
+      const response = await authedFetch("/api/unlocks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ contentId, txHash })
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setStatusMessage(
+          payload.error ??
+            "Unlock verification failed. If payment already succeeded, click Unlock again to retry verification without a new payment."
+        );
+        setBusyKey(null);
+        return;
+      }
+
+      setUnlockedIds((current) => new Set([...current, contentId]));
+      setPendingUnlockTxByContent((current) => {
+        const next = { ...current };
+        delete next[contentId];
+        return next;
+      });
+      setStatusMessage("Content unlocked. Click View Content to open it.");
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? error.message
+          : "Unlock failed. If payment already succeeded, click Unlock again to retry verification without paying twice."
+      );
+    } finally {
+      setBusyKey(null);
+    }
   }
 
   async function handleView(contentId: string) {
     setBusyKey(`view-${contentId}`);
     setStatusMessage(null);
 
-    const response = await fetch(`/api/contents/${contentId}/access`, {
+    const response = await authedFetch(`/api/contents/${contentId}/access`, {
       method: "POST"
     });
 
@@ -133,13 +208,23 @@ export function CreatorProfileClient({
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-muted">{creator.category}</p>
-            <h1 className="font-serif text-4xl">@{creator.username}</h1>
+            <h1 className="font-serif text-4xl">{creator.name}</h1>
+            <p className="text-sm text-muted">@{creator.username}</p>
+            <p className="mt-2 max-w-2xl text-sm text-ink/80">{creator.description}</p>
             <p className="mt-1 text-sm text-ink/75">{creator.subscriberCount} active subscribers</p>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted">
+              <span className="rounded-full border border-border px-2 py-1">
+                {creator.totalContent} premium drops
+              </span>
+              <span className="rounded-full border border-border px-2 py-1">
+                Member since {new Date(creator.memberSince).toLocaleDateString()}
+              </span>
+            </div>
           </div>
           <button
             type="button"
             onClick={handleSubscribe}
-            disabled={isSubscribed || busyKey === "subscribe"}
+            disabled={isSubscribed || busyKey === "subscribe" || isSubmitting}
             className="rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubscribed ? "Subscribed" : `Subscribe ${toUsd(creator.subscriptionFee)}/mo`}
