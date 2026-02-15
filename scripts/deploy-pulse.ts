@@ -1,7 +1,7 @@
 import { network } from "hardhat";
 
 async function main() {
-  const pathUsdAddress = process.env.TEMPO_PATHUSD_ADDRESS ?? process.env.TEMPO_STABLECOIN_ADDRESS;
+  const pathUsdAddress = process.env.TEMPO_PATHUSD_ADDRESS;
 
   if (!pathUsdAddress) {
     throw new Error("Missing TEMPO_PATHUSD_ADDRESS in environment.");

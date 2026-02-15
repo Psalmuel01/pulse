@@ -4,7 +4,7 @@ import { HardhatUserConfig } from "hardhat/config";
 
 const tempoRpcUrl = process.env.TEMPO_RPC_URL;
 const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY;
-const tempoChainId = Number(process.env.TEMPO_CHAIN_ID || "42421");
+const tempoChainId = Number(process.env.TEMPO_CHAIN_ID || "42431");
 
 const config: HardhatUserConfig = {
   plugins: [hardhatToolboxMochaEthersPlugin],
