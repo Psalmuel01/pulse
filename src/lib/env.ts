@@ -7,5 +7,5 @@ export const env = {
   tempoRpcUrl: process.env.TEMPO_RPC_URL,
   tempoPathUsdAddress: process.env.TEMPO_PATHUSD_ADDRESS,
   tempoPathUsdDecimals: Number(process.env.TEMPO_PATHUSD_DECIMALS ?? 6),
-  pulseSubscriptionsContractAddress: process.env.PULSE_SUBSCRIPTIONS_CONTRACT_ADDRESS
+  pulseSubscriptionsContractAddress: process.env.NEXT_PUBLIC_PULSE_SUBSCRIPTIONS_CONTRACT_ADDRESS
 };

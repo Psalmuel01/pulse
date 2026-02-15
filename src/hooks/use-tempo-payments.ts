@@ -351,35 +351,41 @@ export function useTempoPayments() {
       const { account, publicClient, walletClient } = await getClients();
       const amount = await getPathUsdAmount(publicClient, amountUsd);
       const memoHex = memo?.trim() ? stringToHex(memo.trim().slice(0, 31), { size: 32 }) : undefined;
+      const feeOverrides = await resolveFeeOverrides(publicClient);
+      const nonce = await getPendingNonce(publicClient, account);
+      let hash: Hash;
 
-      const request = memoHex
-        ? {
-            address: pathUsd,
-            abi: tip20Abi,
-            functionName: "transferWithMemo" as const,
-            args: [toWallet as Address, amount, memoHex],
-            account
-          }
-        : {
-            address: pathUsd,
-            abi: tip20Abi,
-            functionName: "transfer" as const,
-            args: [toWallet as Address, amount],
-            account
-          };
-
-      const [feeOverrides, gas, nonce] = await Promise.all([
-        resolveFeeOverrides(publicClient),
-        estimateGasWithBuffer(publicClient, request, MIN_GAS_TOKEN_TRANSFER),
-        getPendingNonce(publicClient, account)
-      ]);
-
-      const hash = await walletClient.writeContract({
-        ...request,
-        gas,
-        nonce,
-        ...feeOverrides
-      });
+      if (memoHex) {
+        const request = {
+          address: pathUsd,
+          abi: tip20Abi,
+          functionName: "transferWithMemo" as const,
+          args: [toWallet as Address, amount, memoHex] as const,
+          account
+        };
+        const gas = await estimateGasWithBuffer(publicClient, request, MIN_GAS_TOKEN_TRANSFER);
+        hash = await walletClient.writeContract({
+          ...request,
+          gas,
+          nonce,
+          ...feeOverrides
+        });
+      } else {
+        const request = {
+          address: pathUsd,
+          abi: tip20Abi,
+          functionName: "transfer" as const,
+          args: [toWallet as Address, amount] as const,
+          account
+        };
+        const gas = await estimateGasWithBuffer(publicClient, request, MIN_GAS_TOKEN_TRANSFER);
+        hash = await walletClient.writeContract({
+          ...request,
+          gas,
+          nonce,
+          ...feeOverrides
+        });
+      }
 
       return waitForHash(publicClient, hash);
     });

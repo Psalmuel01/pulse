@@ -11,9 +11,27 @@ Pulse is a Next.js 14 App Router starter for creator subscriptions and pay-per-v
 - Tempo payment verification hooks (pathUSD/TIP-20 transfer validation)
 - Solidity smart contract with Hardhat in `contracts/PulseSubscriptions.sol` (Tempo is EVM-compatible)
 
+## Backend & Deployment Model
+
+Pulse uses a single Next.js app for both frontend and backend.
+
+- Backend runtime: Next.js API routes under `src/app/api/**`
+- Database access: Prisma (`prisma/schema.prisma`) from those API routes
+- Auth/session headers: handled in server helpers (see `src/lib/auth.ts`)
+- Storage: Supabase Storage signed URL operations from server code
+
+You do **not** need to deploy a separate NestJS (or other) backend service for the current architecture.
+
+Deployables are:
+
+- Next.js application (UI + API routes)
+- PostgreSQL database
+- Supabase project (Storage)
+- Tempo contracts (already deployed per your env config)
+
 ## Included Features
 
-- Landing page (`/`) with Privy account creation CTA and authenticated redirect to `/dashboard`
+- Landing page (`/`) with Privy account creation CTA and authenticated redirect to `/explore`
 - Explore creators page (`/explore`)
 - Creator profile page (`/creator/[username]`) with:
   - subscribe flow
@@ -23,12 +41,13 @@ Pulse is a Next.js 14 App Router starter for creator subscriptions and pay-per-v
   - all viewed/unlocked
   - active subscriptions
   - transaction history
-- Creator dashboard (`/dashboard`) with:
+- Creator dashboard (`/creator`) with:
   - analytics (revenue + subscriber trend chart)
   - earnings + withdrawal
   - subscription fee updates
   - content upload + publish metadata
   - subscriber list
+- Legacy dashboard route (`/dashboard`) redirects to `/creator`
 - Become creator page (`/become-creator`)
 
 ## Data Model

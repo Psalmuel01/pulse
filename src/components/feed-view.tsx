@@ -21,10 +21,10 @@ type AllFeedRow = {
 type SubscriptionFeedRow = {
   id: string;
   expiresAt: string | Date;
-  creator: {
-    username: string;
-    contents: unknown[];
-  };
+  creator?: {
+    username?: string;
+    contents?: unknown[] | null;
+  } | null;
 };
 
 type HistoryFeedRow = {
@@ -118,10 +118,12 @@ export function FeedView() {
           (rows as SubscriptionFeedRow[]).map((row) => (
             <article key={row.id} className="rounded-2xl border border-border bg-card p-5">
               <div className="mb-2 flex items-center justify-between">
-                <h3 className="font-semibold">@{row.creator.username}</h3>
+                <h3 className="font-semibold">
+                  @{row.creator?.username ?? "unknown"}
+                </h3>
                 <span className="text-xs text-muted">Expires {new Date(row.expiresAt).toLocaleDateString()}</span>
               </div>
-              <p className="text-sm text-ink/75">{row.creator.contents.length} recent drops</p>
+              <p className="text-sm text-ink/75">{row.creator?.contents?.length ?? 0} recent drops</p>
             </article>
           ))}
 
